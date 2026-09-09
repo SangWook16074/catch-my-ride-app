@@ -33,10 +33,16 @@ class AppButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (background, foreground) = switch (variant) {
-      AppButtonVariant.primary => (context.colors.primary, context.colors.surface),
+      AppButtonVariant.primary => (
+        context.colors.primary,
+        context.colors.onPrimary,
+      ),
       AppButtonVariant.neutral => (context.colors.fill, context.colors.ink),
       AppButtonVariant.tonal => (context.colors.fillStrong, context.colors.ink),
-      AppButtonVariant.danger => (context.colors.danger, context.colors.surface),
+      AppButtonVariant.danger => (
+        context.colors.danger,
+        context.colors.onDanger,
+      ),
     };
     final enabled = onPressed != null && !loading;
 

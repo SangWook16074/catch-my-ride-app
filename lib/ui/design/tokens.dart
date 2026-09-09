@@ -17,6 +17,8 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.primary,
     required this.primaryStrong,
     required this.primarySoft,
+    required this.onPrimary,
+    required this.onDanger,
     required this.caution,
     required this.cautionStrong,
     required this.cautionSoft,
@@ -42,6 +44,12 @@ class AppColors extends ThemeExtension<AppColors> {
 
   /// 선택 배경·연한 카드
   final Color primarySoft;
+
+  /// primary 면 위의 글자 — #43C17C는 밝아서 흰 글자 대비가 안 나온다: 진한 초록빛 잉크
+  final Color onPrimary;
+
+  /// danger 면 위의 글자
+  final Color onDanger;
 
   // 강조 — 코랄 (서두름·포인트, 그린의 따뜻한 짝)
   /// 서두름·강조 면/큰 글자용
@@ -86,11 +94,13 @@ class AppColors extends ThemeExtension<AppColors> {
   /// 카드 테두리·구분선
   final Color line;
 
-  /// 라이트 — 흰 바탕 + 딥그린 + 코랄
+  /// 라이트 — 흰 바탕 + 통합 그린(#43C17C, 다크와 동일) + 코랄
   static const AppColors light = AppColors(
-    primary: Color(0xFF0E8A45),
-    primaryStrong: Color(0xFF066B33),
-    primarySoft: Color(0xFFE1F3E8),
+    primary: Color(0xFF43C17C),
+    primaryStrong: Color(0xFF0E8A45),
+    primarySoft: Color(0xFFE4F6EC),
+    onPrimary: Color(0xFF0B1F13),
+    onDanger: Color(0xFFFFFFFF),
     caution: Color(0xFFF2655A),
     cautionStrong: Color(0xFFD14B41),
     cautionSoft: Color(0xFFFDEAE7),
@@ -102,10 +112,10 @@ class AppColors extends ThemeExtension<AppColors> {
     inkSubtle: Color(0xFF707B74),
     inkFaint: Color(0xFFA4ADA7),
     surface: Color(0xFFFFFFFF),
-    background: Color(0xFFF5F7F5),
-    fill: Color(0xFFEDF1EE),
-    fillStrong: Color(0xFFDFE5E1),
-    line: Color(0xFFE2E7E3),
+    background: Color(0xFFFAFBFA),
+    fill: Color(0xFFF0F3F1),
+    fillStrong: Color(0xFFE2E7E3),
+    line: Color(0xFFE6EAE7),
   );
 
   /// 다크 — 그린 기 도는 근검정 바탕 + 밝힌 그린/코랄 (strong = 다크에서 더 밝게)
@@ -113,6 +123,8 @@ class AppColors extends ThemeExtension<AppColors> {
     primary: Color(0xFF43C17C),
     primaryStrong: Color(0xFF6CD79B),
     primarySoft: Color(0xFF17301F),
+    onPrimary: Color(0xFF0B1F13),
+    onDanger: Color(0xFFFFFFFF),
     caution: Color(0xFFFF8177),
     cautionStrong: Color(0xFFFF9C93),
     cautionSoft: Color(0xFF3A211E),
@@ -135,6 +147,8 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? primary,
     Color? primaryStrong,
     Color? primarySoft,
+    Color? onPrimary,
+    Color? onDanger,
     Color? caution,
     Color? cautionStrong,
     Color? cautionSoft,
@@ -155,6 +169,8 @@ class AppColors extends ThemeExtension<AppColors> {
         primary: primary ?? this.primary,
         primaryStrong: primaryStrong ?? this.primaryStrong,
         primarySoft: primarySoft ?? this.primarySoft,
+        onPrimary: onPrimary ?? this.onPrimary,
+        onDanger: onDanger ?? this.onDanger,
         caution: caution ?? this.caution,
         cautionStrong: cautionStrong ?? this.cautionStrong,
         cautionSoft: cautionSoft ?? this.cautionSoft,
@@ -180,6 +196,8 @@ class AppColors extends ThemeExtension<AppColors> {
       primary: mix(primary, other.primary),
       primaryStrong: mix(primaryStrong, other.primaryStrong),
       primarySoft: mix(primarySoft, other.primarySoft),
+      onPrimary: mix(onPrimary, other.onPrimary),
+      onDanger: mix(onDanger, other.onDanger),
       caution: mix(caution, other.caution),
       cautionStrong: mix(cautionStrong, other.cautionStrong),
       cautionSoft: mix(cautionSoft, other.cautionSoft),
