@@ -45,6 +45,28 @@ ThemeData buildAppTheme(Brightness brightness) {
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: palette.primary,
     ),
+    // 바텀 네비게이션(루트 셸) — 면은 surface, 선택 표시는 브랜드 soft/strong
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: palette.surface,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: palette.primarySoft,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      iconTheme: WidgetStateProperty.resolveWith(
+        (states) => IconThemeData(
+          color: states.contains(WidgetState.selected)
+              ? palette.primaryStrong
+              : palette.inkSubtle,
+        ),
+      ),
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? AppTypo.caption.copyWith(
+                color: palette.ink,
+                fontWeight: FontWeight.w600,
+              )
+            : AppTypo.caption.copyWith(color: palette.inkSubtle),
+      ),
+    ),
     // AppTypo는 색을 갖지 않는다 — 기본 글자색은 여기(DefaultTextStyle)서 팔레트 ink로
     textTheme: base.textTheme.apply(
       bodyColor: palette.ink,
