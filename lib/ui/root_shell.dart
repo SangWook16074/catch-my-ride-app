@@ -5,7 +5,8 @@ import 'design/tokens.dart';
 import 'home_page.dart';
 
 /// 루트 셸 — 메인·놓치지마·새로운 기능·내정보 4개 탭을 바텀 네비게이션으로 묶는다.
-/// IndexedStack으로 탭 전환 시에도 메인(라이브 뷰)의 폴링·선택 경로 상태를 유지한다.
+/// 메인은 각 섹션의 요약(대시보드) 자리, 놓치지마가 라이브 뷰 본편(HomePage)이다.
+/// IndexedStack으로 탭 전환 시에도 라이브 뷰의 폴링·선택 경로 상태를 유지한다.
 /// 아이콘은 우선 Flutter 기본(Material) 아이콘 — 브랜드 아이콘이 나오면 교체한다.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -18,12 +19,12 @@ class _RootShellState extends State<RootShell> {
   int _index = 0;
 
   static const List<Widget> _pages = [
-    HomePage(),
     _PlaceholderPage(
-      icon: Icons.directions_bus_outlined,
-      title: '놓치지마',
-      subtitle: '놓치지마 화면을 준비하고 있어요',
+      icon: Icons.home_outlined,
+      title: '메인',
+      subtitle: '각 섹션의 요약을 보여줄 화면이에요',
     ),
+    HomePage(),
     _PlaceholderPage(
       icon: Icons.auto_awesome_outlined,
       title: '새로운 기능',

@@ -24,8 +24,21 @@ void main() {
 
     expect(find.byType(NavigationBar), findsOneWidget);
     for (final label in ['메인', '놓치지마', '새로운 기능', '내정보']) {
-      expect(find.text(label), findsOneWidget);
+      // 자리 화면 제목과 겹칠 수 있으니 네비게이션 바 안에서만 찾는다
+      expect(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text(label),
+        ),
+        findsOneWidget,
+      );
     }
+  });
+
+  testWidgets('첫 탭은 메인(섹션 요약 자리)이다', (tester) async {
+    await pumpShell(tester);
+
+    expect(find.text('각 섹션의 요약을 보여줄 화면이에요'), findsOneWidget);
   });
 
   testWidgets('탭을 누르면 해당 화면으로 이동한다', (tester) async {
@@ -39,8 +52,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('새로운 기능이 들어올 자리예요'), findsOneWidget);
 
-    // 메인으로 복귀 — 라이브 뷰(경로 없음 = 온보딩 안내)가 다시 보인다
-    await tester.tap(find.text('메인'));
+    // 놓치지마 = 라이브 뷰 본편 (경로 없음 = 온보딩 안내)
+    await tester.tap(find.text('놓치지마'));
     await tester.pumpAndSettle();
     expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
   });
