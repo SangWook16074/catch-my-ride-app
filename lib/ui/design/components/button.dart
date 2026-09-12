@@ -46,23 +46,32 @@ class AppButton extends StatelessWidget {
     };
     final enabled = onPressed != null && !loading;
 
+    final text = Text(
+      label,
+      style: (medium ? AppTypo.bodySm : AppTypo.body).copyWith(
+        color: foreground,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    // 로딩 중에도 라벨을 투명하게 유지해 버튼 크기가 변하지 않게 한다 —
+    // 스피너로 교체하면 제약이 줄어 옆 위젯들이 움직인다 (검색 버튼 등)
     final child = loading
-        ? SizedBox(
-            width: 18,
-            height: 18,
-            // 적응형 UI 규칙: 로딩은 .adaptive 우선
-            child: CircularProgressIndicator.adaptive(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(foreground),
-            ),
+        ? Stack(
+            alignment: Alignment.center,
+            children: [
+              Opacity(opacity: 0, child: text),
+              SizedBox(
+                width: 18,
+                height: 18,
+                // 적응형 UI 규칙: 로딩은 .adaptive 우선
+                child: CircularProgressIndicator.adaptive(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(foreground),
+                ),
+              ),
+            ],
           )
-        : Text(
-            label,
-            style: (medium ? AppTypo.bodySm : AppTypo.body).copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w600,
-            ),
-          );
+        : text;
 
     final button = FilledButton(
       onPressed: enabled ? onPressed : null,

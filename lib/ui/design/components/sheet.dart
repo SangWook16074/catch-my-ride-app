@@ -21,9 +21,7 @@ Future<T?> showAppSheet<T>({
     ),
     builder: (context) => Padding(
       // 키보드가 올라오면 시트도 따라 올라간다 (이름 수정 시트)
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         top: false,
         child: Column(

@@ -1,4 +1,4 @@
-package com.example.catch_my_ride
+package dev.hansw.catchmyride
 
 import io.flutter.embedding.android.FlutterActivity
 

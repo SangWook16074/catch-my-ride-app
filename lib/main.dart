@@ -1,9 +1,27 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'data/push_registrar.dart';
+import 'firebase_options.dart';
 import 'ui/design/theme.dart';
 import 'ui/home_page.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Firebase — 푸시(FCM) 기반. 초기화 실패(설정 파일 문제 등)해도 본편(라이브 뷰)은
+  // 동작해야 하므로 앱을 죽이지 않는다 — 푸시만 못 받는 상태로 강등된다.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    // 이미 허용된 유저의 토큰 로테이션·재설치를 따라잡는다 (다이얼로그 없음, 시작 비차단)
+    unawaited(pushRegistrar.syncIfAuthorized());
+  } catch (error) {
+    developer.log('firebase init failed: $error', name: 'push');
+  }
   runApp(const CatchMyRideApp());
 }
 

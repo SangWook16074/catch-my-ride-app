@@ -34,10 +34,23 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  # 집 위치 1회 등록(FR-101) — lib/platform/location.dart에서만 사용
+  geolocator: ^14.0.2
+  # 버퍼 추천 처리 시각·익명 키 등 로컬 저장 — lib/data/에서만 사용
+  shared_preferences: ^2.5.3
+  # 실서버 API 클라이언트 — lib/data/http_api.dart에서만 사용
+  http: ^1.5.0
+  # 딥링크 수신(catchmyride://) — lib/platform/deep_links.dart에서만 사용
+  app_links: ^6.4.1
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # 앱 아이콘 생성 — assets/icon/app_icon.png(미니앱 로고의 프라이머리 컬러판)에서
+  # iOS·Android 전 사이즈를 만든다: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -48,6 +61,12 @@ dev_dependencies:
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  remove_alpha_ios: true
 
 # The following section is specific to Flutter packages.
 flutter:

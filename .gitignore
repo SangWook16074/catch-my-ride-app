@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# 로컬 에이전트 세션 상태 (커밋 금지)
+.omc/
+.claude/

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/api.dart';
+import '../data/push_registrar.dart';
 import '../domain/models.dart';
 import '../domain/onboarding.dart';
 import 'design/components/button.dart';
@@ -112,12 +113,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
     // 햅틱: 경로 저장 확정 (CLAUDE.md 적응형 UI 규칙)
     unawaited(HapticFeedback.mediumImpact());
-    // 스토어판 푸시 수신 동의(FCM/APNs 권한)는 알림 인프라와 함께 이 시점에 붙인다.
-    // ⚠️ 설계 규칙 (TODO 2026-09-09, 미니앱 실측 사고 — 연속 동의 요청을 네이티브가 삼켜
-    // 리마인드 전량 미전달, 발송은 SUCCESS로 위장):
-    //   1) 권한·동의 다이얼로그를 연속으로 띄우지 않는다 — 사이 간격 + 실패 시 1회 재시도
-    //   2) 동의/권한 상태를 단계별로 확인하고 결과를 로깅해 조용한 실패를 남기지 않는다
-    //   3) "성공 응답 ≠ 실제 전달"을 전제로 전달 실패를 관측 가능하게 만든다
+    // 알림을 받으려고 설정한 직후가 동의를 구할 가장 자연스러운 시점 (미니앱과 동일).
+    // 이 화면의 다른 다이얼로그(위치 권한)는 1단계에서 끝났으므로 연속 노출이 아니다.
+    // 이미 허용/거부된 상태면 시스템이 다이얼로그 없이 지나간다 — 저장마다 불러도 스팸 아님.
+    // 거부·실패해도 앱 사용은 계속된다 (결과는 PushRegistrar가 로깅).
+    await pushRegistrar.ensureRegistered();
     if (!mounted) {
       return;
     }

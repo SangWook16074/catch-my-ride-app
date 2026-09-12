@@ -266,25 +266,31 @@ class _SelectRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: selected ? context.colors.primarySoft : context.colors.fill,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            label,
-            style: AppTypo.body.copyWith(
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? context.colors.primaryStrong : context.colors.ink,
+    final radius = BorderRadius.circular(AppRadius.md);
+    // 마진은 탭 영역 밖, 잉크는 Material 위 — 하이라이트가 보이는 면과 정확히 일치한다
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.sm),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? context.colors.primarySoft : context.colors.fill,
+          borderRadius: radius,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: radius,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Text(
+                label,
+                style: AppTypo.body.copyWith(
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected
+                      ? context.colors.primaryStrong
+                      : context.colors.ink,
+                ),
+              ),
             ),
           ),
         ),
@@ -1035,16 +1041,19 @@ class _DaysStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 다른 단계들과 레이아웃 통일 — 프리셋은 전체 폭 행, 개별 선택은 그 아래
+        // (버퍼 단계와 같은 문법: 행 프리셋 → 직접 고르기)
+        _SelectRow(
+          label: '평일 (월~금)',
+          selected: weekdaysOnly,
+          onPressed: () =>
+              update(draft.copyWith(activeDays: List.of(_weekdays))),
+        ),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            AppChip(
-              label: '평일',
-              selected: weekdaysOnly,
-              onPressed: () =>
-                  update(draft.copyWith(activeDays: List.of(_weekdays))),
-            ),
             for (final entry in _dayLabels)
               AppChip(
                 label: entry.label,

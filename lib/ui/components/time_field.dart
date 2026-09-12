@@ -42,26 +42,32 @@ class TimeField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = value;
-    return Semantics(
-      button: true,
-      label: label,
-      child: InkWell(
-        onTap: () => _openSheet(context),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Container(
-          margin: const EdgeInsets.only(top: AppSpace.md),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpace.lg,
-            vertical: AppSpace.md,
-          ),
-          decoration: BoxDecoration(
-            color: context.colors.fill,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          child: Text(
-            current != null ? formatKoreanTime(current) : placeholder,
-            style: AppTypo.body.copyWith(
-              color: current != null ? context.colors.ink : context.colors.inkSubtle,
+    final radius = BorderRadius.circular(AppRadius.md);
+    // 마진은 탭 영역 밖, 잉크는 Material 위 — 하이라이트가 필드 면과 정확히 일치한다
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: context.colors.fill,
+          borderRadius: radius,
+          child: InkWell(
+            onTap: () => _openSheet(context),
+            borderRadius: radius,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.lg,
+                vertical: AppSpace.md,
+              ),
+              child: Text(
+                current != null ? formatKoreanTime(current) : placeholder,
+                style: AppTypo.body.copyWith(
+                  color: current != null
+                      ? context.colors.ink
+                      : context.colors.inkSubtle,
+                ),
+              ),
             ),
           ),
         ),

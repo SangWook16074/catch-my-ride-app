@@ -46,8 +46,10 @@ lib/
 ### 디자인 시스템 (TDS를 쓰지 않는다)
 
 - 스토어판은 미니앱의 TDS(토스 디자인 시스템)와 **별개의 자체 디자인 시스템**을 쓴다
-  (오너 결정 2026-09-09, 같은 날 2차 개정). 방향: **딥그린 × 코랄** — 그린이 주인공,
-  코랄이 따뜻한 강조(서두름·포인트). 세이지 파스텔안("뿌옇다")·주황 경고안을 거쳐 확정.
+  (오너 결정 2026-09-09, 같은 날 4차 확정). 방향: **그린(#42D674) × 코랄** — 그린이
+  주인공, 코랄이 따뜻한 강조(서두름·포인트). 세이지 파스텔안("뿌옇다")·주황 경고안을 거쳐 확정.
+- **배경·중성은 순수 무채색** (3차 개정): 라이트는 흰색, 다크는 검은색 바탕 — 배경에
+  초록 기를 끼얹지 않는다. 그린은 브랜드 토큰(primary 계열)에만 남는다.
 - **라이트/다크 필수**: 팔레트는 `AppColors.light`/`AppColors.dark` 두 인스턴스
   (ThemeExtension). 위젯에서는 반드시 `context.colors.*`로 접근 — AppColors를 static으로
   참조하는 코드는 다크 모드가 깨지므로 금지. 타이포(AppTypo)는 색을 갖지 않는다 —
@@ -74,7 +76,9 @@ lib/
 | 브리지 | 방향 | 용도 |
 |---|---|---|
 | geolocator 플러그인 (`lib/platform/location.dart`) | Flutter → OS | 온보딩 집 위치 1회 등록 (FR-101). 상시 추적 금지(NFR-05) |
-| shared_preferences 플러그인 (`lib/data/suggestion_store.dart`) | Flutter → OS | 버퍼 추천 처리 시각 등 경량 로컬 저장 |
+| shared_preferences 플러그인 (`lib/data/suggestion_store.dart`, `lib/data/auth.dart`) | Flutter → OS | 버퍼 추천 처리 시각·익명 키(§8-3) 등 경량 로컬 저장 |
+| app_links 플러그인 (`lib/platform/deep_links.dart`) | OS → Flutter | 딥링크 수신 — `catchmyride://open?from=push&notifiedDate=…` (스킴: iOS Info.plist / Android manifest) |
+| firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |
 
 ## 위젯·Live Activity 데이터 계약
 

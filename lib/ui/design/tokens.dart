@@ -1,7 +1,8 @@
 /// 놓치지마 디자인 시스템 — 토큰.
 ///
-/// 방향(오너 결정 2026-09-09, 2차 개정): **딥그린 × 코랄** 듀오 — 그린이 주인공,
-/// 코랄이 따뜻한 강조(서두름·포인트). 라이트/다크 팔레트를 나란히 정의하고
+/// 방향(오너 결정 2026-09-09, 4차 확정): **그린(#42D674) × 코랄** 듀오 — 그린이 주인공,
+/// 코랄이 따뜻한 강조(서두름·포인트). 배경·중성은 순수 무채색(라이트 흰색/다크 검은색) —
+/// 초록 기는 브랜드 토큰에만 남긴다. 라이트/다크 팔레트를 나란히 정의하고
 /// ThemeExtension으로 등록해 시스템 다크 모드를 자동으로 따른다.
 ///
 /// 규칙: 화면·컴포넌트는 `context.colors.*` 토큰만 쓴다 — Color(0x...)/fontSize
@@ -45,7 +46,7 @@ class AppColors extends ThemeExtension<AppColors> {
   /// 선택 배경·연한 카드
   final Color primarySoft;
 
-  /// primary 면 위의 글자 — #43C17C는 밝아서 흰 글자 대비가 안 나온다: 진한 초록빛 잉크
+  /// primary 면 위의 글자 — #42D674는 밝아서 흰 글자 대비가 안 나온다: 진한 초록빛 잉크
   final Color onPrimary;
 
   /// danger 면 위의 글자
@@ -94,11 +95,12 @@ class AppColors extends ThemeExtension<AppColors> {
   /// 카드 테두리·구분선
   final Color line;
 
-  /// 라이트 — 흰 바탕 + 통합 그린(#43C17C, 다크와 동일) + 코랄
+  /// 라이트 — 순백 바탕 + 그린(#42D674) + 코랄.
+  /// 중성은 순수 무채색 (오너 결정 2026-09-09: 배경에 초록 기를 끼얹지 않는다)
   static const AppColors light = AppColors(
-    primary: Color(0xFF43C17C),
-    primaryStrong: Color(0xFF0E8A45),
-    primarySoft: Color(0xFFE4F6EC),
+    primary: Color(0xFF42D674),
+    primaryStrong: Color(0xFF119D4E),
+    primarySoft: Color(0xFFE3FAEC),
     onPrimary: Color(0xFF0B1F13),
     onDanger: Color(0xFFFFFFFF),
     caution: Color(0xFFF2655A),
@@ -107,22 +109,23 @@ class AppColors extends ThemeExtension<AppColors> {
     danger: Color(0xFFB3261E),
     dangerStrong: Color(0xFF8E1B15),
     dangerSoft: Color(0xFFF9E0DE),
-    ink: Color(0xFF1A1F1B),
-    inkMuted: Color(0xFF4C5650),
-    inkSubtle: Color(0xFF707B74),
-    inkFaint: Color(0xFFA4ADA7),
+    ink: Color(0xFF1A1A1A),
+    inkMuted: Color(0xFF555555),
+    inkSubtle: Color(0xFF767676),
+    inkFaint: Color(0xFFA8A8A8),
     surface: Color(0xFFFFFFFF),
-    background: Color(0xFFFAFBFA),
-    fill: Color(0xFFF0F3F1),
-    fillStrong: Color(0xFFE2E7E3),
-    line: Color(0xFFE6EAE7),
+    background: Color(0xFFFFFFFF),
+    fill: Color(0xFFF2F2F2),
+    fillStrong: Color(0xFFE4E4E4),
+    line: Color(0xFFE7E7E7),
   );
 
-  /// 다크 — 그린 기 도는 근검정 바탕 + 밝힌 그린/코랄 (strong = 다크에서 더 밝게)
+  /// 다크 — 검은 바탕 + 밝힌 그린/코랄 (strong = 다크에서 더 밝게).
+  /// 중성은 순수 무채색 — primarySoft 같은 브랜드 면에만 그린 기가 남는다
   static const AppColors dark = AppColors(
-    primary: Color(0xFF43C17C),
-    primaryStrong: Color(0xFF6CD79B),
-    primarySoft: Color(0xFF17301F),
+    primary: Color(0xFF42D674),
+    primaryStrong: Color(0xFF71E5A0),
+    primarySoft: Color(0xFF15331F),
     onPrimary: Color(0xFF0B1F13),
     onDanger: Color(0xFFFFFFFF),
     caution: Color(0xFFFF8177),
@@ -131,15 +134,15 @@ class AppColors extends ThemeExtension<AppColors> {
     danger: Color(0xFFE0453C),
     dangerStrong: Color(0xFFEE6A62),
     dangerSoft: Color(0xFF371E1B),
-    ink: Color(0xFFECF1ED),
-    inkMuted: Color(0xFFB6C0B9),
-    inkSubtle: Color(0xFF8B958E),
-    inkFaint: Color(0xFF5C665F),
-    surface: Color(0xFF1B201D),
-    background: Color(0xFF131714),
-    fill: Color(0xFF222824),
-    fillStrong: Color(0xFF2C332E),
-    line: Color(0xFF262D28),
+    ink: Color(0xFFF2F2F2),
+    inkMuted: Color(0xFFB4B4B4),
+    inkSubtle: Color(0xFF8C8C8C),
+    inkFaint: Color(0xFF5C5C5C),
+    surface: Color(0xFF161616),
+    background: Color(0xFF000000),
+    fill: Color(0xFF1F1F1F),
+    fillStrong: Color(0xFF2A2A2A),
+    line: Color(0xFF262626),
   );
 
   @override

@@ -7,10 +7,14 @@ import '../data/api.dart';
 import '../data/suggestion_store.dart';
 import '../domain/buffer_suggestion.dart';
 import '../domain/models.dart';
+import '../domain/push_entry.dart';
+import '../platform/deep_links.dart';
+import '../platform/push.dart';
 import 'components/route_delete_sheet.dart';
 import 'components/route_rename_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/chip.dart';
+import 'design/components/sheet.dart';
 import 'design/tokens.dart';
 import 'live_view_screen.dart';
 import 'onboarding_page.dart';
@@ -48,18 +52,111 @@ class _HomePageState extends State<HomePage> {
   Timer? _timer;
   bool _hasData = false;
 
+  /// 푸시 딥링크가 알려준 날짜 — 피드백 기록에 쓴다 (자정 넘김 등 엣지 대비)
+  final DeepLinks _deepLinks = DeepLinks();
+  final PushBridge _push = PushBridge();
+  String? _pushNotifiedDate;
+  StreamSubscription<Uri>? _linkSub;
+  StreamSubscription<Uri>? _pushLinkSub;
+
   @override
   void initState() {
     super.initState();
     unawaited(_refresh());
     unawaited(_checkBufferSuggestion());
+    unawaited(_initDeepLinks());
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_refresh()));
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(_linkSub?.cancel());
+    unawaited(_pushLinkSub?.cancel());
     super.dispose();
+  }
+
+  /// 딥링크 진입(catchmyride://open?from=push&notifiedDate=…) —
+  /// 커스텀 스킴(콜드·웜)과 FCM 알림 탭(data.link) 모두 같은 파서를 태운다
+  Future<void> _initDeepLinks() async {
+    _pushLinkSub = _push.openedLinks.listen((uri) {
+      if (mounted) {
+        _handleLink(uri);
+      }
+    });
+    final initial = await _deepLinks.getInitialLink();
+    if (mounted && initial != null) {
+      _handleLink(initial);
+    }
+    _linkSub = _deepLinks.uriStream.listen((uri) {
+      if (mounted) {
+        _handleLink(uri);
+      }
+    });
+  }
+
+  /// 푸시로 들어왔으면 탑승 여부 프롬프트를 먼저 띄운다 (미니앱 promptFeedback 이식).
+  /// 이미 오늘 피드백을 남겼으면 다시 묻지 않는다
+  void _handleLink(Uri uri) {
+    final entry = parsePushEntry(uri);
+    if (!entry.fromPush || _todayFeedback != null) {
+      return;
+    }
+    _pushNotifiedDate = entry.notifiedDate;
+    unawaited(
+      showAppSheet<void>(
+        context: context,
+        header: '오늘 알림대로 탑승하셨나요?',
+        builder: (sheetContext) => Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.xl,
+            0,
+            AppSpace.xl,
+            AppSpace.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '알려주시면 다음 알림이 더 정확해져요',
+                style: AppTypo.bodySm.copyWith(
+                  color: sheetContext.colors.inkMuted,
+                ),
+              ),
+              const SizedBox(height: AppSpace.md),
+              Row(
+                children: [
+                  for (final (index, result) in const [
+                    BoardingResult.boarded,
+                    BoardingResult.missed,
+                  ].indexed) ...[
+                    if (index > 0) const SizedBox(width: AppSpace.sm),
+                    Expanded(
+                      child: AppButton(
+                        label: result == BoardingResult.boarded
+                            ? '탔어요'
+                            : '놓쳤어요',
+                        variant: result == BoardingResult.boarded
+                            ? AppButtonVariant.primary
+                            : AppButtonVariant.tonal,
+                        medium: true,
+                        block: true,
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                          HapticFeedback.mediumImpact();
+                          unawaited(_handleFeedback(result));
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _refresh() async {
@@ -140,7 +237,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _handleFeedback(BoardingResult result) async {
     final today = DateTime.now();
     String pad(int n) => n.toString().padLeft(2, '0');
-    final notifiedDate =
+    // 푸시가 알려준 날짜가 있으면 그 날짜로 기록한다 (자정 넘김 등 엣지 대비)
+    final notifiedDate = _pushNotifiedDate ??
         '${today.year}-${pad(today.month)}-${pad(today.day)}';
     try {
       await api.postBoardingFeedback(
