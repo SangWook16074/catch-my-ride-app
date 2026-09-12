@@ -65,7 +65,7 @@ void main() {
 
     await tester.tap(navLabel('내정보'));
     await tester.pumpAndSettle();
-    expect(find.text('내 정보 화면을 준비하고 있어요'), findsOneWidget);
+    expect(find.text('통근 경로'), findsOneWidget);
 
     await tester.tap(navLabel('새로운 기능'));
     await tester.pumpAndSettle();

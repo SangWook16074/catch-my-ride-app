@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'design/tokens.dart';
 import 'home_page.dart';
 import 'main_page.dart';
+import 'my_info_page.dart';
 
 /// 루트 셸 — 메인·놓치지마·새로운 기능·내정보 4개 탭을 바텀 네비게이션으로 묶는다.
 /// 메인은 각 섹션의 요약(대시보드) 자리, 놓치지마가 라이브 뷰 본편(HomePage)이다.
@@ -37,11 +38,7 @@ class _RootShellState extends State<RootShell> {
         title: '새로운 기능',
         subtitle: '새로운 기능이 들어올 자리예요',
       ),
-      const _PlaceholderPage(
-        icon: Icons.person_outlined,
-        title: '내정보',
-        subtitle: '내 정보 화면을 준비하고 있어요',
-      ),
+      MyInfoPage(active: _index == 3),
     ];
     return Scaffold(
       backgroundColor: context.colors.background,

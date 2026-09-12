@@ -79,6 +79,7 @@ lib/
 | shared_preferences 플러그인 (`lib/data/suggestion_store.dart`, `lib/data/auth.dart`) | Flutter → OS | 버퍼 추천 처리 시각·익명 키(§8-3) 등 경량 로컬 저장 |
 | app_links 플러그인 (`lib/platform/deep_links.dart`) | OS → Flutter | 딥링크 수신 — `catchmyride://open?from=push&notifiedDate=…` (스킴: iOS Info.plist / Android manifest) |
 | firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |
+| package_info_plus 플러그인 (`lib/platform/app_info.dart`) | Flutter → OS | 앱 버전·빌드 번호 표시 (내정보 탭) |
 
 ## 위젯·Live Activity 데이터 계약
 

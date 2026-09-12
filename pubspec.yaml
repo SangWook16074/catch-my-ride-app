@@ -44,6 +44,8 @@ dependencies:
   app_links: ^6.4.1
   firebase_core: ^4.14.0
   firebase_messaging: ^16.6.0
+  # 앱 버전 표시(내정보) — lib/platform/app_info.dart에서만 사용
+  package_info_plus: ^10.2.1
 
 dev_dependencies:
   flutter_test:
