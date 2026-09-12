@@ -19,41 +19,60 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// 페이지 안 텍스트와 겹칠 수 있으니 탭은 네비게이션 바 안에서만 찾아 누른다
+  Finder navLabel(String label) => find.descendant(
+    of: find.byType(NavigationBar),
+    matching: find.text(label),
+  );
+
   testWidgets('바텀 네비게이션에 4개 탭이 있다', (tester) async {
     await pumpShell(tester);
 
     expect(find.byType(NavigationBar), findsOneWidget);
     for (final label in ['메인', '놓치지마', '새로운 기능', '내정보']) {
-      // 자리 화면 제목과 겹칠 수 있으니 네비게이션 바 안에서만 찾는다
-      expect(
-        find.descendant(
-          of: find.byType(NavigationBar),
-          matching: find.text(label),
-        ),
-        findsOneWidget,
-      );
+      expect(navLabel(label), findsOneWidget);
     }
   });
 
-  testWidgets('첫 탭은 메인(섹션 요약 자리)이다', (tester) async {
+  testWidgets('첫 탭 메인에 놓치지마 요약 섹션이 있다', (tester) async {
     await pumpShell(tester);
 
-    expect(find.text('각 섹션의 요약을 보여줄 화면이에요'), findsOneWidget);
+    // 경로가 없는 상태 — 요약 카드는 설정 유도를 보여준다
+    expect(find.text('전체 보기'), findsOneWidget);
+    expect(find.text('아직 통근 설정이 없어요'), findsOneWidget);
+  });
+
+  testWidgets('요약 카드의 설정 시작하기를 누르면 놓치지마 탭으로 전환된다', (tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(find.text('설정 시작하기'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
+  });
+
+  testWidgets('전체 보기를 누르면 놓치지마 탭으로 전환된다', (tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(find.text('전체 보기'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
   });
 
   testWidgets('탭을 누르면 해당 화면으로 이동한다', (tester) async {
     await pumpShell(tester);
 
-    await tester.tap(find.text('내정보'));
+    await tester.tap(navLabel('내정보'));
     await tester.pumpAndSettle();
     expect(find.text('내 정보 화면을 준비하고 있어요'), findsOneWidget);
 
-    await tester.tap(find.text('새로운 기능'));
+    await tester.tap(navLabel('새로운 기능'));
     await tester.pumpAndSettle();
     expect(find.text('새로운 기능이 들어올 자리예요'), findsOneWidget);
 
     // 놓치지마 = 라이브 뷰 본편 (경로 없음 = 온보딩 안내)
-    await tester.tap(find.text('놓치지마'));
+    await tester.tap(navLabel('놓치지마'));
     await tester.pumpAndSettle();
     expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
   });

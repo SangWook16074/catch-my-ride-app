@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'design/tokens.dart';
 import 'home_page.dart';
+import 'main_page.dart';
 
 /// 루트 셸 — 메인·놓치지마·새로운 기능·내정보 4개 탭을 바텀 네비게이션으로 묶는다.
 /// 메인은 각 섹션의 요약(대시보드) 자리, 놓치지마가 라이브 뷰 본편(HomePage)이다.
@@ -18,25 +19,6 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   int _index = 0;
 
-  static const List<Widget> _pages = [
-    _PlaceholderPage(
-      icon: Icons.home_outlined,
-      title: '메인',
-      subtitle: '각 섹션의 요약을 보여줄 화면이에요',
-    ),
-    HomePage(),
-    _PlaceholderPage(
-      icon: Icons.auto_awesome_outlined,
-      title: '새로운 기능',
-      subtitle: '새로운 기능이 들어올 자리예요',
-    ),
-    _PlaceholderPage(
-      icon: Icons.person_outlined,
-      title: '내정보',
-      subtitle: '내 정보 화면을 준비하고 있어요',
-    ),
-  ];
-
   void _select(int index) {
     if (index == _index) {
       return;
@@ -47,9 +29,23 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      MainPage(active: _index == 0, onOpenCatch: () => _select(1)),
+      const HomePage(),
+      const _PlaceholderPage(
+        icon: Icons.auto_awesome_outlined,
+        title: '새로운 기능',
+        subtitle: '새로운 기능이 들어올 자리예요',
+      ),
+      const _PlaceholderPage(
+        icon: Icons.person_outlined,
+        title: '내정보',
+        subtitle: '내 정보 화면을 준비하고 있어요',
+      ),
+    ];
     return Scaffold(
       backgroundColor: context.colors.background,
-      body: IndexedStack(index: _index, children: _pages),
+      body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: context.colors.line)),

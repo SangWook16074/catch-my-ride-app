@@ -56,7 +56,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(RootShell), findsOneWidget);
-    expect(find.text('각 섹션의 요약을 보여줄 화면이에요'), findsOneWidget);
+    expect(find.text('아직 통근 설정이 없어요'), findsOneWidget);
   });
 
   testWidgets('경로가 이미 있으면 온보딩 없이 루트 셸로 들어간다', (tester) async {
