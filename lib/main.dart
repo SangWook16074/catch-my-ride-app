@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'data/push_registrar.dart';
 import 'firebase_options.dart';
 import 'ui/design/theme.dart';
-import 'ui/root_shell.dart';
+import 'ui/startup_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +25,8 @@ Future<void> main() async {
   runApp(const CatchMyRideApp());
 }
 
-/// 놓치지마 스토어판 — 루트는 바텀 네비게이션 셸(메인·놓치지마·새로운 기능·내정보).
+/// 놓치지마 스토어판 — 시작은 StartupGate: 첫 실행에 경로가 없으면 바로 온보딩,
+/// 이후에는 바텀 네비게이션 셸(메인·놓치지마·새로운 기능·내정보).
 /// 놓치지마 탭의 플로우는 미니앱(catch_my_ride_appintoss)과 동일:
 /// 라이브 뷰 ↔ 온보딩 7단계 위저드. 메인 탭은 각 섹션 요약(대시보드) 자리.
 class CatchMyRideApp extends StatelessWidget {
@@ -38,7 +39,7 @@ class CatchMyRideApp extends StatelessWidget {
       theme: buildAppTheme(Brightness.light),
       darkTheme: buildAppTheme(Brightness.dark),
       themeMode: ThemeMode.system,
-      home: const RootShell(),
+      home: const StartupGate(),
     );
   }
 }

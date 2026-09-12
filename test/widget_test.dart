@@ -1,22 +1,71 @@
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
+import 'package:catch_my_ride/domain/models.dart';
 import 'package:catch_my_ride/main.dart';
+import 'package:catch_my_ride/ui/onboarding_page.dart';
+import 'package:catch_my_ride/ui/root_shell.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// mock에 경로 하나를 미리 심는다 — "이미 설정한 사용자" 시나리오용
+Future<void> seedRoute() {
+  return api.createCommuteRoute(
+    const CommuteRouteRequest(
+      label: '출근',
+      enabled: true,
+      setting: CommuteSetting(
+        home: GeoPoint(latitude: 37.5665, longitude: 126.978),
+        stops: [
+          CommuteStop(
+            type: StopType.seoulBus,
+            stopId: '12345',
+            displayName: '테스트 정류장',
+            routes: ['146'],
+          ),
+        ],
+        walkMinutes: 5,
+        notificationMode: NotificationMode.fixed,
+        fixedDepartureTime: '08:20',
+        commuteWindow: null,
+        bufferMinutes: 3,
+        activeDays: [DayOfWeek.mon, DayOfWeek.tue],
+      ),
+    ),
+  );
+}
+
 void main() {
-  testWidgets('놓치지마 탭에서 경로가 없으면 온보딩 시작 안내를 보여준다', (tester) async {
+  setUp(() {
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
+  });
+
+  testWidgets('첫 실행에 경로가 없으면 바로 온보딩으로 들어간다', (tester) async {
     await tester.pumpWidget(const CatchMyRideApp());
-    // mock API의 첫 listCommuteRoutes 응답을 기다린다
     await tester.pumpAndSettle();
 
-    // 라이브 뷰 본편은 놓치지마 탭에 있다 (첫 탭은 메인 요약 자리)
-    await tester.tap(find.text('놓치지마'));
+    expect(find.byType(OnboardingPage), findsOneWidget);
+  });
+
+  testWidgets('온보딩에서 뒤로 나오면 루트 셸로 진입한다', (tester) async {
+    await tester.pumpWidget(const CatchMyRideApp());
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
-    expect(find.text('설정 시작하기'), findsOneWidget);
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RootShell), findsOneWidget);
+    expect(find.text('각 섹션의 요약을 보여줄 화면이에요'), findsOneWidget);
+  });
+
+  testWidgets('경로가 이미 있으면 온보딩 없이 루트 셸로 들어간다', (tester) async {
+    await seedRoute();
+
+    await tester.pumpWidget(const CatchMyRideApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OnboardingPage), findsNothing);
+    expect(find.byType(RootShell), findsOneWidget);
   });
 }
