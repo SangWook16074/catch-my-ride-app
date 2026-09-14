@@ -545,7 +545,13 @@ class MockNochijimaApi implements NochijimaApi {
     if (trip == null || trip.tripId != tripId) {
       throw _notFound();
     }
-    // 폴링 1회 = 1정거장 전진 (하차 완료 상태에서는 멈춤)
+    // 실서버 §9-3 미러: 첫 폴링은 열차 특정 전(위치 확인 중, remaining null),
+    // 이후 폴링 1회 = 1정거장 전진 (하차 완료 상태에서는 멈춤)
+    if (!trip.identified) {
+      final identifying = trip.status();
+      trip.identified = true;
+      return identifying;
+    }
     if (trip.remainingStops > 0) {
       trip.remainingStops--;
     }
@@ -563,6 +569,7 @@ class MockNochijimaApi implements NochijimaApi {
     }
     trip.legIndex++;
     trip.remainingStops = _mockLegStops;
+    trip.identified = false; // 새 구간 — 다음 열차 특정 전(위치 확인 중)부터
     return trip.status();
   }
 
@@ -590,9 +597,12 @@ class _MockTrip {
   int legIndex = 0;
   int remainingStops;
 
+  /// false = 열차 특정 전(위치 확인 중) — 실서버 §9-3의 remaining null 상태
+  bool identified = false;
+
   TripStatus status() {
     final isLastLeg = legIndex >= legs.length - 1;
-    final phase = remainingStops > 1
+    final phase = !identified || remainingStops > 1
         ? TripPhase.tracking
         : remainingStops == 1
         ? TripPhase.arriving
@@ -602,7 +612,7 @@ class _MockTrip {
     return TripStatus(
       phase: phase,
       legIndex: legIndex,
-      remainingStops: remainingStops,
+      remainingStops: identified ? remainingStops : null,
       nextStop: null,
       eventStop: legs[legIndex].alightStop,
       realtimeAvailable: true,

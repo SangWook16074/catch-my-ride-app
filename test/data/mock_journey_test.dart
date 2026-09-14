@@ -57,8 +57,13 @@ void main() {
     final listed = await api.listJourneys();
     expect(listed.first.lastUsedAt, isNotNull);
 
-    // 폴링마다 1정거장 전진: 3 → 2(TRACKING) → 1(ARRIVING) → 0(TRANSFER)
+    // 첫 폴링 = 열차 특정 전(위치 확인 중, §9-3) → 이후 1정거장씩:
+    // null → 2(TRACKING) → 1(ARRIVING) → 0(TRANSFER)
     var status = await api.getTrip(start.tripId);
+    expect(status.phase, TripPhase.tracking);
+    expect(status.remainingStops, isNull);
+
+    status = await api.getTrip(start.tripId);
     expect(status.phase, TripPhase.tracking);
     expect(status.remainingStops, 2);
     expect(status.eventStop, '당산');
@@ -69,16 +74,18 @@ void main() {
     status = await api.getTrip(start.tripId);
     expect(status.phase, TripPhase.transfer);
 
-    // 환승 수동 재개(FR-703) → 두 번째 구간
+    // 환승 수동 재개(FR-703) → 두 번째 구간 — 다시 특정 전부터
     status = await api.advanceTripLeg(start.tripId);
     expect(status.phase, TripPhase.tracking);
     expect(status.legIndex, 1);
     expect(status.eventStop, '강남');
+    expect(status.remainingStops, isNull);
 
     // 마지막 구간 완주 → DONE
-    await api.getTrip(start.tripId);
-    await api.getTrip(start.tripId);
-    status = await api.getTrip(start.tripId);
+    await api.getTrip(start.tripId); // 특정
+    await api.getTrip(start.tripId); // 2
+    await api.getTrip(start.tripId); // 1
+    status = await api.getTrip(start.tripId); // 0
     expect(status.phase, TripPhase.done);
 
     await api.endTrip(start.tripId);

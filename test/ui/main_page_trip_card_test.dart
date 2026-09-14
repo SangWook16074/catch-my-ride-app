@@ -33,15 +33,15 @@ void main() {
         home: Scaffold(body: MainPage(active: true, onOpenCatch: () {})),
       ),
     );
-    await tester.pumpAndSettle(); // 확인 폴링으로 3 → 2정거장
+    await tester.pumpAndSettle(); // 확인 폴링 — 열차 특정 전(위치 확인 중)
 
     expect(find.text('하차 알림 진행 중'), findsOneWidget);
-    expect(find.text('당산까지 2정거장'), findsOneWidget);
+    expect(find.text('당산행 — 위치 확인 중'), findsOneWidget);
 
     await tester.tap(find.text('하차 알림 진행 중'));
-    await tester.pumpAndSettle(); // 트립 화면 첫 폴링 — 1정거장(다음 역)
+    await tester.pumpAndSettle(); // 트립 화면 폴링 — 2정거장
 
     expect(find.byType(TripPage), findsOneWidget);
-    expect(find.text('다음 역이에요!'), findsOneWidget);
+    expect(find.text('2정거장 남았어요'), findsOneWidget);
   });
 }

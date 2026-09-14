@@ -392,7 +392,9 @@ class _JourneyPageState extends State<JourneyPage> {
     TripPhase.transfer => '${status.eventStop} 환승 대기 중 — 탑승하면 눌러주세요',
     TripPhase.lost => '추적이 끊겼어요 — 상태를 확인해주세요',
     TripPhase.done => '목적지 도착 — 트립을 마무리해주세요',
-    _ => '${status.eventStop}까지 ${status.remainingStops}정거장',
+    _ => status.remainingStops == null
+        ? '${status.eventStop}행 — 위치 확인 중'
+        : '${status.eventStop}까지 ${status.remainingStops}정거장',
   };
 
   Widget _journeyCard(Journey journey) {

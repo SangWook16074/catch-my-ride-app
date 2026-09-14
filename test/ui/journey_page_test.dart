@@ -69,12 +69,15 @@ void main() {
     await tester.tap(find.text('시작'));
     await tester.pumpAndSettle();
 
-    // mock은 폴링 1회당 1정거장 전진 — 첫 조회 후 2정거장
+    // 첫 폴링 = 열차 특정 전(위치 확인 중, §9-3)
     expect(find.byType(TripPage), findsOneWidget);
     expect(find.text('당산에서 내려요'), findsOneWidget);
+    expect(find.text('위치 확인 중이에요…'), findsOneWidget);
+
+    // 20초 폴링마다 전진: 2정거장 → 다음 역(ARRIVING) → 하차(단일 구간 = DONE)
+    await tester.pump(const Duration(seconds: 20));
     expect(find.text('2정거장 남았어요'), findsOneWidget);
 
-    // 20초 폴링 2회 → 다음 역(ARRIVING) → 하차(단일 구간 = DONE)
     await tester.pump(const Duration(seconds: 20));
     expect(find.text('다음 역이에요!'), findsOneWidget);
 
@@ -92,18 +95,18 @@ void main() {
     await pumpPage(tester);
 
     await tester.tap(find.text('시작'));
-    await tester.pumpAndSettle(); // TripPage 첫 폴링 — 2정거장
+    await tester.pumpAndSettle(); // TripPage 첫 폴링 — 위치 확인 중
 
     await tester.pageBack();
-    await tester.pumpAndSettle(); // 목록 복귀 — 이어보기 확인 폴링으로 1정거장
+    await tester.pumpAndSettle(); // 목록 복귀 — 이어보기 확인 폴링으로 2정거장
 
     expect(find.text('진행 중인 트립이 있어요'), findsOneWidget);
-    expect(find.text('당산까지 1정거장'), findsOneWidget);
+    expect(find.text('당산까지 2정거장'), findsOneWidget);
 
     await tester.tap(find.text('이어보기'));
-    await tester.pumpAndSettle(); // 단일 구간 — 다음 폴링에서 도착
+    await tester.pumpAndSettle(); // 다음 폴링 — 직전 역(ARRIVING)
 
     expect(find.byType(TripPage), findsOneWidget);
-    expect(find.text('목적지에 도착했어요'), findsOneWidget);
+    expect(find.text('다음 역이에요!'), findsOneWidget);
   });
 }

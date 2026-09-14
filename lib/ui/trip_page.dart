@@ -162,6 +162,9 @@ class _TripPageState extends State<TripPage> {
       case TripPhase.tracking:
       case TripPhase.arriving:
         final arriving = status.phase == TripPhase.arriving;
+        final remaining = status.remainingStops;
+        // TRACKING + remaining null = 열차 특정 전 "위치 확인 중" — 숫자를 지어내지 않는다 (API.md §9-3)
+        final identifying = !arriving && remaining == null;
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -172,11 +175,17 @@ class _TripPageState extends State<TripPage> {
             ),
             const SizedBox(height: AppSpace.lg),
             Text(
-              arriving ? '다음 역이에요!' : '${status.remainingStops}정거장 남았어요',
+              arriving
+                  ? '다음 역이에요!'
+                  : identifying
+                  ? '위치 확인 중이에요…'
+                  : '$remaining정거장 남았어요',
               textAlign: TextAlign.center,
               style: AppTypo.title.copyWith(
                 color: arriving
                     ? context.colors.cautionStrong
+                    : identifying
+                    ? context.colors.inkSubtle
                     : context.colors.primaryStrong,
               ),
             ),
