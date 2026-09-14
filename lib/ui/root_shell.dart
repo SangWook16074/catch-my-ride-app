@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 
 import 'design/tokens.dart';
 import 'home_page.dart';
+import 'journey_page.dart';
 import 'main_page.dart';
 import 'my_info_page.dart';
 
-/// 루트 셸 — 메인·놓치지마·새로운 기능·내정보 4개 탭을 바텀 네비게이션으로 묶는다.
-/// 메인은 각 섹션의 요약(대시보드) 자리, 놓치지마가 라이브 뷰 본편(HomePage)이다.
+/// 루트 셸 — 메인·놓치지마·하차 알림·내정보 4개 탭을 바텀 네비게이션으로 묶는다.
+/// 메인은 각 섹션의 요약(대시보드), 놓치지마가 라이브 뷰 본편(HomePage),
+/// 하차 알림은 여정 추적(명세서 §3.7)이다.
 /// IndexedStack으로 탭 전환 시에도 라이브 뷰의 폴링·선택 경로 상태를 유지한다.
 /// 아이콘은 우선 Flutter 기본(Material) 아이콘 — 브랜드 아이콘이 나오면 교체한다.
 class RootShell extends StatefulWidget {
@@ -33,11 +35,7 @@ class _RootShellState extends State<RootShell> {
     final pages = [
       MainPage(active: _index == 0, onOpenCatch: () => _select(1)),
       const HomePage(),
-      const _PlaceholderPage(
-        icon: Icons.auto_awesome_outlined,
-        title: '새로운 기능',
-        subtitle: '새로운 기능이 들어올 자리예요',
-      ),
+      JourneyPage(active: _index == 2),
       MyInfoPage(active: _index == 3),
     ];
     return Scaffold(
@@ -62,48 +60,14 @@ class _RootShellState extends State<RootShell> {
               label: '놓치지마',
             ),
             NavigationDestination(
-              icon: Icon(Icons.auto_awesome_outlined),
-              selectedIcon: Icon(Icons.auto_awesome),
-              label: '새로운 기능',
+              icon: Icon(Icons.subway_outlined),
+              selectedIcon: Icon(Icons.subway),
+              label: '하차 알림',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outlined),
               selectedIcon: Icon(Icons.person),
               label: '내정보',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 아직 내용이 없는 탭의 자리 화면 — 실제 화면이 생기면 _pages에서 교체한다
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 48, color: context.colors.inkFaint),
-            const SizedBox(height: AppSpace.lg),
-            Text(title, style: AppTypo.heading),
-            const SizedBox(height: AppSpace.sm),
-            Text(
-              subtitle,
-              style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
             ),
           ],
         ),

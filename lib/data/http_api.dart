@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../domain/journey.dart';
 import '../domain/models.dart';
 import 'api.dart';
 import 'auth.dart';
@@ -218,6 +219,56 @@ class HttpNochijimaApi implements NochijimaApi {
       jibunAddress: json['jibunAddress'] as String? ?? '',
     );
   }
+
+  // §9 하차 알림 — 서버 미구현 단계에선 404가 내려온다 (UI가 "준비 중"으로 강등)
+
+  @override
+  Future<List<Journey>> listJourneys() async {
+    final json = await _get('/api/v1/journeys') as Map<String, dynamic>;
+    return [
+      for (final journey in json['journeys'] as List<dynamic>)
+        _journeyFromJson(journey as Map<String, dynamic>),
+    ];
+  }
+
+  @override
+  Future<Journey> createJourney(JourneyRequest request) async =>
+      _journeyFromJson(
+        await _send('POST', '/api/v1/journeys', _journeyRequestToJson(request))
+            as Map<String, dynamic>,
+      );
+
+  @override
+  Future<Journey> updateJourney(String id, JourneyRequest request) async =>
+      _journeyFromJson(
+        await _send('PUT', '/api/v1/journeys/$id', _journeyRequestToJson(request))
+            as Map<String, dynamic>,
+      );
+
+  @override
+  Future<void> deleteJourney(String id) => _send('DELETE', '/api/v1/journeys/$id');
+
+  @override
+  Future<TripStart> startTrip(String journeyId) async {
+    final json = await _send('POST', '/api/v1/journeys/$journeyId/trips')
+        as Map<String, dynamic>;
+    return TripStart(
+      tripId: json['tripId'] as String,
+      startedAt: json['startedAt'] as String,
+    );
+  }
+
+  @override
+  Future<TripStatus> getTrip(String tripId) async =>
+      _tripStatusFromJson(await _get('/api/v1/trips/$tripId') as Map<String, dynamic>);
+
+  @override
+  Future<TripStatus> advanceTripLeg(String tripId) async => _tripStatusFromJson(
+    await _send('POST', '/api/v1/trips/$tripId/next-leg') as Map<String, dynamic>,
+  );
+
+  @override
+  Future<void> endTrip(String tripId) => _send('DELETE', '/api/v1/trips/$tripId');
 }
 
 // ---- JSON ↔ domain 변환 ----
@@ -236,6 +287,49 @@ ArrivalStatus _statusFromWire(String wire) => switch (wire) {
   'HURRY' => ArrivalStatus.hurry,
   _ => ArrivalStatus.missed,
 };
+
+Journey _journeyFromJson(Map<String, dynamic> json) => Journey(
+  id: json['id'] as String,
+  label: json['label'] as String,
+  repeatDays: [
+    for (final day in json['repeatDays'] as List<dynamic>? ?? const [])
+      _dayFromWire(day as String),
+  ],
+  legs: [
+    for (final leg in json['legs'] as List<dynamic>)
+      JourneyLeg(
+        line: (leg as Map<String, dynamic>)['line'] as String,
+        boardStop: leg['boardStop'] as String,
+        alightStop: leg['alightStop'] as String,
+      ),
+  ],
+  lastUsedAt: json['lastUsedAt'] as String?,
+);
+
+Map<String, dynamic> _journeyRequestToJson(JourneyRequest request) => {
+  'label': request.label,
+  'repeatDays': [for (final day in request.repeatDays) day.wire],
+  'legs': [
+    for (final leg in request.legs)
+      {
+        // v1은 지하철만 (API.md §9)
+        'type': 'SUBWAY',
+        'line': leg.line,
+        'boardStop': leg.boardStop,
+        'alightStop': leg.alightStop,
+      },
+  ],
+};
+
+TripStatus _tripStatusFromJson(Map<String, dynamic> json) => TripStatus(
+  phase: TripPhase.fromWire(json['phase'] as String),
+  legIndex: (json['legIndex'] as num).toInt(),
+  remainingStops: (json['remainingStops'] as num?)?.toInt(),
+  nextStop: json['nextStop'] as String?,
+  eventStop: json['eventStop'] as String,
+  realtimeAvailable: json['realtimeAvailable'] as bool? ?? true,
+  fetchedAt: json['fetchedAt'] as String,
+);
 
 CommuteRoute _routeFromJson(Map<String, dynamic> json) => CommuteRoute(
   id: json['id'] as String,

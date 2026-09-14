@@ -3,6 +3,7 @@
 /// 미니앱 src/api/mock.ts 이식 — 검증 규칙·배차 파라미터 동일.
 library;
 
+import '../domain/journey.dart';
 import '../domain/models.dart';
 import '../domain/onboarding.dart' show routeLabelMaxLength;
 import 'api.dart';
@@ -428,6 +429,184 @@ class MockNochijimaApi implements NochijimaApi {
       missedCount: missedCount,
       sampleSize: recent.length,
       suggestedIncrementMinutes: 5,
+    );
+  }
+
+  // §9 하차 알림 — 여정·트립. 트립 시뮬레이션은 폴링 1회당 1정거장 전진(결정적 — 테스트 가능)
+
+  final List<Journey> _journeys = [];
+  int _nextJourneyId = 1;
+  _MockTrip? _trip;
+  int _nextTripId = 1;
+
+  /// mock 구간 길이 — 이벤트(하차/환승) 역까지 3정거장으로 고정
+  static const int _mockLegStops = 3;
+
+  void _validateJourney(JourneyRequest request, [String? selfId]) {
+    final message = validateJourneyRequest(request);
+    if (message != null) {
+      throw _invalid(message);
+    }
+    final label = request.label.trim();
+    if (_journeys.any((j) => j.id != selfId && j.label == label)) {
+      throw _invalid('같은 이름의 여정이 이미 있습니다: $label');
+    }
+  }
+
+  @override
+  Future<List<Journey>> listJourneys() async {
+    // lastUsedAt 내림차순(히스토리), null은 생성순 뒤 (§9-1)
+    final used = _journeys.where((j) => j.lastUsedAt != null).toList()
+      ..sort((a, b) => b.lastUsedAt!.compareTo(a.lastUsedAt!));
+    final unused = _journeys.where((j) => j.lastUsedAt == null).toList();
+    return [...used, ...unused];
+  }
+
+  @override
+  Future<Journey> createJourney(JourneyRequest request) async {
+    if (_journeys.length >= maxJourneys) {
+      throw _invalid('여정은 최대 $maxJourneys개까지 저장할 수 있습니다');
+    }
+    _validateJourney(request);
+    final journey = Journey(
+      id: 'mock-journey-${_nextJourneyId++}',
+      label: request.label.trim(),
+      repeatDays: List.of(request.repeatDays),
+      legs: List.of(request.legs),
+      lastUsedAt: null,
+    );
+    _journeys.add(journey);
+    return journey;
+  }
+
+  @override
+  Future<Journey> updateJourney(String id, JourneyRequest request) async {
+    final index = _journeys.indexWhere((j) => j.id == id);
+    if (index == -1) {
+      throw _notFound();
+    }
+    _validateJourney(request, id);
+    final journey = Journey(
+      id: id,
+      label: request.label.trim(),
+      repeatDays: List.of(request.repeatDays),
+      legs: List.of(request.legs),
+      lastUsedAt: _journeys[index].lastUsedAt,
+    );
+    _journeys[index] = journey;
+    return journey;
+  }
+
+  @override
+  Future<void> deleteJourney(String id) async {
+    final index = _journeys.indexWhere((j) => j.id == id);
+    if (index == -1) {
+      throw _notFound();
+    }
+    _journeys.removeAt(index);
+    // 진행 중 트립이 이 여정이면 함께 종료 (§9-1)
+    if (_trip?.journeyId == id) {
+      _trip = null;
+    }
+  }
+
+  @override
+  Future<TripStart> startTrip(String journeyId) async {
+    final index = _journeys.indexWhere((j) => j.id == journeyId);
+    if (index == -1) {
+      throw _notFound();
+    }
+    final active = _trip;
+    if (active != null) {
+      throw _invalid('진행 중인 트립이 있습니다: ${active.tripId}');
+    }
+    final journey = _journeys[index];
+    final startedAt = DateTime.now().toIso8601String();
+    _trip = _MockTrip(
+      tripId: 'mock-trip-${_nextTripId++}',
+      journeyId: journey.id,
+      legs: journey.legs,
+      remainingStops: _mockLegStops,
+    );
+    // lastUsedAt 갱신 — 히스토리 정렬 키 (§9-2)
+    _journeys[index] = Journey(
+      id: journey.id,
+      label: journey.label,
+      repeatDays: journey.repeatDays,
+      legs: journey.legs,
+      lastUsedAt: startedAt,
+    );
+    return TripStart(tripId: _trip!.tripId, startedAt: startedAt);
+  }
+
+  @override
+  Future<TripStatus> getTrip(String tripId) async {
+    final trip = _trip;
+    if (trip == null || trip.tripId != tripId) {
+      throw _notFound();
+    }
+    // 폴링 1회 = 1정거장 전진 (하차 완료 상태에서는 멈춤)
+    if (trip.remainingStops > 0) {
+      trip.remainingStops--;
+    }
+    return trip.status();
+  }
+
+  @override
+  Future<TripStatus> advanceTripLeg(String tripId) async {
+    final trip = _trip;
+    if (trip == null || trip.tripId != tripId) {
+      throw _notFound();
+    }
+    if (trip.status().phase != TripPhase.transfer) {
+      throw _invalid('환승 대기 상태가 아닙니다');
+    }
+    trip.legIndex++;
+    trip.remainingStops = _mockLegStops;
+    return trip.status();
+  }
+
+  @override
+  Future<void> endTrip(String tripId) async {
+    // 완료·취소 공용, 멱등 (§9-3) — 없는 트립도 에러 아님
+    if (_trip?.tripId == tripId) {
+      _trip = null;
+    }
+  }
+}
+
+/// 진행 중 트립 시뮬레이션 — phase는 남은 정거장 수에서 유도한다 (§9-3)
+class _MockTrip {
+  _MockTrip({
+    required this.tripId,
+    required this.journeyId,
+    required this.legs,
+    required this.remainingStops,
+  });
+
+  final String tripId;
+  final String journeyId;
+  final List<JourneyLeg> legs;
+  int legIndex = 0;
+  int remainingStops;
+
+  TripStatus status() {
+    final isLastLeg = legIndex >= legs.length - 1;
+    final phase = remainingStops > 1
+        ? TripPhase.tracking
+        : remainingStops == 1
+        ? TripPhase.arriving
+        : isLastLeg
+        ? TripPhase.done
+        : TripPhase.transfer;
+    return TripStatus(
+      phase: phase,
+      legIndex: legIndex,
+      remainingStops: remainingStops,
+      nextStop: null,
+      eventStop: legs[legIndex].alightStop,
+      realtimeAvailable: true,
+      fetchedAt: DateTime.now().toIso8601String(),
     );
   }
 }

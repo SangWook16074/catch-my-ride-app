@@ -29,7 +29,7 @@ void main() {
     await pumpShell(tester);
 
     expect(find.byType(NavigationBar), findsOneWidget);
-    for (final label in ['메인', '놓치지마', '새로운 기능', '내정보']) {
+    for (final label in ['메인', '놓치지마', '하차 알림', '내정보']) {
       expect(navLabel(label), findsOneWidget);
     }
   });
@@ -67,9 +67,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('통근 경로'), findsOneWidget);
 
-    await tester.tap(navLabel('새로운 기능'));
+    await tester.tap(navLabel('하차 알림'));
     await tester.pumpAndSettle();
-    expect(find.text('새로운 기능이 들어올 자리예요'), findsOneWidget);
+    expect(find.text('아직 여정이 없어요'), findsOneWidget);
 
     // 놓치지마 = 라이브 뷰 본편 (경로 없음 = 온보딩 안내)
     await tester.tap(navLabel('놓치지마'));

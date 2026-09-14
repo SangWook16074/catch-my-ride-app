@@ -4,6 +4,7 @@
 /// 서버 없이 개발할 때는 `flutter run --dart-define=USE_MOCK=true`로 mock을 쓴다.
 library;
 
+import '../domain/journey.dart';
 import '../domain/models.dart';
 import 'auth.dart';
 import 'http_api.dart';
@@ -46,6 +47,30 @@ abstract interface class NochijimaApi {
 
   /// §4-1 — 스토어판 FCM 토큰 등록·갱신 (멱등). platform: "IOS" | "ANDROID"
   Future<void> registerPushToken(String token, String platform);
+
+  // §9 하차 알림 — 여정·트립 (서버 미구현 단계: 404면 UI가 "준비 중"으로 강등)
+
+  /// §9-1 — 여정 목록. lastUsedAt 내림차순(히스토리), null은 생성순 뒤
+  Future<List<Journey>> listJourneys();
+
+  /// §9-1 — 여정 생성. 11개째·라벨 중복·legs 검증 실패는 400 INVALID_REQUEST
+  Future<Journey> createJourney(JourneyRequest request);
+
+  Future<Journey> updateJourney(String id, JourneyRequest request);
+
+  Future<void> deleteJourney(String id);
+
+  /// §9-2 — 트립 시작 (유저 수동, FR-703). 동시 트립 1개 — 초과는 400
+  Future<TripStart> startTrip(String journeyId);
+
+  /// §9-3 — 트립 상태 (15~30초 폴링, FR-204 준용)
+  Future<TripStatus> getTrip(String tripId);
+
+  /// §9-3 — 환승 후 다음 구간 수동 재개. TRANSFER가 아니면 400
+  Future<TripStatus> advanceTripLeg(String tripId);
+
+  /// §9-3 — 트립 종료 (완료·취소 공용, 멱등)
+  Future<void> endTrip(String tripId);
 }
 
 /// API.md 공통 Base URL — 지도 미리보기(§6) 이미지 URL도 여기서 만든다
