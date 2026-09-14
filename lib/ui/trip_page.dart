@@ -42,8 +42,8 @@ class _TripPageState extends State<TripPage> {
   @override
   void initState() {
     super.initState();
-    // 잠금화면 Live Activity 시작 (FR-705) — iOS 16.1 미만·비활성은 브리지가 조용히 무시
-    unawaited(_liveActivity.start(widget.journeyLabel));
+    // 잠금화면 표면 시작 (FR-705) — iOS Live Activity / Android 지속 알림, 미지원은 조용히 무시
+    unawaited(_liveActivity.start(widget.journeyLabel, tripId: widget.tripId));
     unawaited(_refresh());
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_refresh()));
   }
