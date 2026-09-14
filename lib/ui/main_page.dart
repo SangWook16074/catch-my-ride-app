@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/api.dart';
+import '../data/trip_store.dart';
+import '../domain/journey.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/tokens.dart';
+import 'trip_page.dart';
 
 /// 메인 탭 — 각 섹션의 요약(대시보드). 지금은 놓치지마 요약 섹션 하나.
 ///
@@ -35,10 +38,15 @@ class MainPage extends StatefulWidget {
 enum _SummaryPhase { loading, empty, ready, failed }
 
 class _MainPageState extends State<MainPage> {
+  final TripStore _tripStore = TripStore();
   _SummaryPhase _phase = _SummaryPhase.loading;
   CommuteRoute? _route;
   ArrivalsResponse? _response;
   bool _stale = false;
+
+  /// 진행 중 트립(하차 알림) 요약 — 로컬 보관 tripId를 서버 상태로 확인
+  String? _tripId;
+  TripStatus? _trip;
 
   @override
   void initState() {
@@ -56,6 +64,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _load() async {
+    unawaited(_checkTrip());
     try {
       final routes = await api.listCommuteRoutes();
       if (!mounted) {
@@ -109,6 +118,50 @@ class _MainPageState extends State<MainPage> {
     widget.onOpenCatch();
   }
 
+  Future<void> _checkTrip() async {
+    final tripId = await _tripStore.read();
+    if (tripId == null) {
+      if (mounted) {
+        setState(() {
+          _tripId = null;
+          _trip = null;
+        });
+      }
+      return;
+    }
+    try {
+      final status = await api.getTrip(tripId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _tripId = tripId;
+        _trip = status;
+      });
+    } on ApiException catch (error) {
+      if (error.status == 404) {
+        // 서버에서 정리된 트립 — 로컬 보관도 정리
+        unawaited(_tripStore.clear());
+        if (mounted) {
+          setState(() {
+            _tripId = null;
+            _trip = null;
+          });
+        }
+      }
+    } catch (_) {
+      // 네트워크 실패 — 카드만 생략
+    }
+  }
+
+  Future<void> _openTrip(String tripId) async {
+    HapticFeedback.selectionClick();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => TripPage(tripId: tripId)),
+    );
+    unawaited(_load());
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -152,11 +205,50 @@ class _MainPageState extends State<MainPage> {
               ),
             ),
             GestureDetector(onTap: _openCatch, child: _summaryCard()),
+            if (_trip != null && _tripId != null)
+              GestureDetector(
+                onTap: () => unawaited(_openTrip(_tripId!)),
+                child: AppCard(
+                  tone: AppCardTone.brand,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '하차 알림 진행 중',
+                              style: AppTypo.caption.copyWith(
+                                color: context.colors.primaryStrong,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpace.xs),
+                            Text(_tripSummary(_trip!), style: AppTypo.heading),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        size: 20,
+                        color: context.colors.inkSubtle,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+
+  String _tripSummary(TripStatus status) => switch (status.phase) {
+    TripPhase.transfer => '${status.eventStop} 환승 대기 중',
+    TripPhase.lost => '추적이 끊겼어요',
+    TripPhase.done => '목적지 도착',
+    _ => '${status.eventStop}까지 ${status.remainingStops}정거장',
+  };
 
   Widget _summaryCard() {
     switch (_phase) {

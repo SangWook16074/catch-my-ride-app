@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../data/api.dart';
 import '../data/suggestion_store.dart';
 import '../domain/buffer_suggestion.dart';
+import '../domain/journey.dart';
 import '../domain/models.dart';
 import '../domain/push_entry.dart';
 import '../platform/deep_links.dart';
@@ -18,6 +19,7 @@ import 'design/components/sheet.dart';
 import 'design/tokens.dart';
 import 'live_view_screen.dart';
 import 'onboarding_page.dart';
+import 'trip_page.dart';
 
 /// 라이브 뷰 폴링 주기 — FR-204: 활성 사용 시 15~30초
 const Duration _pollInterval = Duration(seconds: 20);
@@ -98,6 +100,17 @@ class _HomePageState extends State<HomePage> {
   /// 푸시로 들어왔으면 탑승 여부 프롬프트를 먼저 띄운다 (미니앱 promptFeedback 이식).
   /// 이미 오늘 피드백을 남겼으면 다시 묻지 않는다
   void _handleLink(Uri uri) {
+    // 하차 푸시(catchmyride://trip?tripId=…, §9-4) — 트립 진행 화면으로.
+    // 탑승 피드백 프롬프트(from=push)와는 별개 흐름
+    final tripId = parseTripLink(uri);
+    if (tripId != null) {
+      unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => TripPage(tripId: tripId)),
+        ),
+      );
+      return;
+    }
     final entry = parsePushEntry(uri);
     if (!entry.fromPush || _todayFeedback != null) {
       return;

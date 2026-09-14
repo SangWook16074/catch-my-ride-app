@@ -108,6 +108,15 @@ String journeyPathSummary(List<JourneyLeg> legs) {
   return parts.join(' → ');
 }
 
+/// 하차 푸시 딥링크(`catchmyride://trip?tripId=…`) 파싱 — 트립 링크가 아니면 null (API.md §9-4)
+String? parseTripLink(Uri? uri) {
+  if (uri == null || uri.host != 'trip') {
+    return null;
+  }
+  final tripId = uri.queryParameters['tripId'];
+  return (tripId == null || tripId.isEmpty) ? null : tripId;
+}
+
 /// 트립 진행 상태 (API.md §9-3)
 enum TripPhase {
   tracking('TRACKING'),

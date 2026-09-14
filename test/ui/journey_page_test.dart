@@ -86,4 +86,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TripPage), findsNothing);
   });
+
+  testWidgets('트립을 끝내지 않고 나오면 이어보기 카드가 보인다', (tester) async {
+    await api.createJourney(_request);
+    await pumpPage(tester);
+
+    await tester.tap(find.text('시작'));
+    await tester.pumpAndSettle(); // TripPage 첫 폴링 — 2정거장
+
+    await tester.pageBack();
+    await tester.pumpAndSettle(); // 목록 복귀 — 이어보기 확인 폴링으로 1정거장
+
+    expect(find.text('진행 중인 트립이 있어요'), findsOneWidget);
+    expect(find.text('당산까지 1정거장'), findsOneWidget);
+
+    await tester.tap(find.text('이어보기'));
+    await tester.pumpAndSettle(); // 단일 구간 — 다음 폴링에서 도착
+
+    expect(find.byType(TripPage), findsOneWidget);
+    expect(find.text('목적지에 도착했어요'), findsOneWidget);
+  });
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/api.dart';
+import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
@@ -15,7 +16,12 @@ const Duration _pollInterval = Duration(seconds: 20);
 
 /// 진행 중 트립 화면 (FR-705) — 남은 정거장 카운트다운, 환승 수동 재개(FR-703).
 class TripPage extends StatefulWidget {
-  const TripPage({super.key, required this.tripId, required this.journeyLabel});
+  const TripPage({
+    super.key,
+    required this.tripId,
+    // 푸시 딥링크 진입은 여정 라벨을 모른다 — 기능명으로 대체
+    this.journeyLabel = '하차 알림',
+  });
 
   final String tripId;
   final String journeyLabel;
@@ -25,6 +31,7 @@ class TripPage extends StatefulWidget {
 }
 
 class _TripPageState extends State<TripPage> {
+  final TripStore _tripStore = TripStore();
   TripStatus? _status;
   bool _stale = false;
   bool _gone = false;
@@ -63,7 +70,8 @@ class _TripPageState extends State<TripPage> {
         return;
       }
       if (error.status == 404) {
-        // 트립이 서버에서 정리됨 — 종료 안내로 강등
+        // 트립이 서버에서 정리됨 — 종료 안내로 강등, 이어보기 저장도 정리
+        unawaited(_tripStore.clear());
         setState(() => _gone = true);
         return;
       }
@@ -97,6 +105,7 @@ class _TripPageState extends State<TripPage> {
   }
 
   Future<void> _end() async {
+    unawaited(_tripStore.clear());
     try {
       await api.endTrip(widget.tripId);
     } catch (_) {

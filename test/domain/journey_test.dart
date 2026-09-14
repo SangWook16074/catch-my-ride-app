@@ -74,6 +74,25 @@ void main() {
     expect(journeyPathSummary(const []), '');
   });
 
+  group('parseTripLink', () {
+    test('catchmyride://trip?tripId=… → tripId', () {
+      expect(
+        parseTripLink(Uri.parse('catchmyride://trip?tripId=abc-123')),
+        'abc-123',
+      );
+    });
+
+    test('트립 링크가 아니거나 tripId가 없으면 null', () {
+      expect(parseTripLink(null), isNull);
+      expect(
+        parseTripLink(Uri.parse('catchmyride://open?from=push')),
+        isNull,
+      );
+      expect(parseTripLink(Uri.parse('catchmyride://trip')), isNull);
+      expect(parseTripLink(Uri.parse('catchmyride://trip?tripId=')), isNull);
+    });
+  });
+
   test('TripPhase.fromWire 왕복', () {
     for (final phase in TripPhase.values) {
       expect(TripPhase.fromWire(phase.wire), phase);

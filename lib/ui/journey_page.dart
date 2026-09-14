@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/api.dart';
+import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
 import 'design/components/button.dart';
@@ -42,8 +43,13 @@ class JourneyPage extends StatefulWidget {
 }
 
 class _JourneyPageState extends State<JourneyPage> {
+  final TripStore _tripStore = TripStore();
   _JourneyPhase _phase = _JourneyPhase.loading;
   List<Journey> _journeys = [];
+
+  /// 진행 중 트립(이어보기) — 로컬 보관 tripId를 서버 상태로 확인한다
+  String? _activeTripId;
+  TripStatus? _activeTrip;
 
   @override
   void initState() {
@@ -60,6 +66,7 @@ class _JourneyPageState extends State<JourneyPage> {
   }
 
   Future<void> _load() async {
+    unawaited(_checkActiveTrip());
     try {
       final journeys = await api.listJourneys();
       if (!mounted) {
@@ -87,6 +94,49 @@ class _JourneyPageState extends State<JourneyPage> {
     }
   }
 
+  Future<void> _checkActiveTrip() async {
+    final tripId = await _tripStore.read();
+    if (tripId == null) {
+      if (mounted) {
+        setState(() {
+          _activeTripId = null;
+          _activeTrip = null;
+        });
+      }
+      return;
+    }
+    try {
+      final status = await api.getTrip(tripId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activeTripId = tripId;
+        _activeTrip = status;
+      });
+    } on ApiException catch (error) {
+      if (error.status == 404) {
+        // 서버에서 이미 정리된 트립 — 로컬 보관도 정리
+        unawaited(_tripStore.clear());
+        if (mounted) {
+          setState(() {
+            _activeTripId = null;
+            _activeTrip = null;
+          });
+        }
+      }
+    } catch (_) {
+      // 네트워크 실패 — 배너만 생략, 다음 갱신에 재시도
+    }
+  }
+
+  Future<void> _openTrip(String tripId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => TripPage(tripId: tripId)),
+    );
+    unawaited(_load());
+  }
+
   Future<void> _openCreate() async {
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const JourneyCreatePage()),
@@ -101,6 +151,8 @@ class _JourneyPageState extends State<JourneyPage> {
     HapticFeedback.mediumImpact();
     try {
       final start = await api.startTrip(journey.id);
+      // 이어보기·메인 요약 카드용 로컬 보관 (서버에 활성 트립 조회가 없다 — §9)
+      unawaited(_tripStore.write(start.tripId));
       if (!mounted) {
         return;
       }
@@ -269,7 +321,33 @@ class _JourneyPageState extends State<JourneyPage> {
           ),
         ];
       case _JourneyPhase.ready:
+        final activeTrip = _activeTrip;
+        final activeTripId = _activeTripId;
         return [
+          if (activeTrip != null && activeTripId != null)
+            AppCard(
+              tone: AppCardTone.brand,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('진행 중인 트립이 있어요', style: AppTypo.heading),
+                  const SizedBox(height: AppSpace.xs),
+                  Text(
+                    _activeTripSummary(activeTrip),
+                    style: AppTypo.bodySm.copyWith(
+                      color: context.colors.inkMuted,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  AppButton(
+                    label: '이어보기',
+                    medium: true,
+                    block: true,
+                    onPressed: () => unawaited(_openTrip(activeTripId)),
+                  ),
+                ],
+              ),
+            ),
           if (_journeys.isEmpty)
             AppCard(
               tone: AppCardTone.brand,
@@ -309,6 +387,13 @@ class _JourneyPageState extends State<JourneyPage> {
         ];
     }
   }
+
+  String _activeTripSummary(TripStatus status) => switch (status.phase) {
+    TripPhase.transfer => '${status.eventStop} 환승 대기 중 — 탑승하면 눌러주세요',
+    TripPhase.lost => '추적이 끊겼어요 — 상태를 확인해주세요',
+    TripPhase.done => '목적지 도착 — 트립을 마무리해주세요',
+    _ => '${status.eventStop}까지 ${status.remainingStops}정거장',
+  };
 
   Widget _journeyCard(Journey journey) {
     final repeat = _repeatDaysLabel(journey.repeatDays);
