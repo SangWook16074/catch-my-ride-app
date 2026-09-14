@@ -12,5 +12,9 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // 하차 알림 Live Activity 브리지 (CLAUDE.md 네이티브 브리지 목록)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LiveActivityBridge") {
+      LiveActivityBridge.register(with: registrar)
+    }
   }
 }

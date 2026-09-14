@@ -80,11 +80,17 @@ lib/
 | app_links 플러그인 (`lib/platform/deep_links.dart`) | OS → Flutter | 딥링크 수신 — `catchmyride://open?from=push&notifiedDate=…` (스킴: iOS Info.plist / Android manifest) |
 | firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |
 | package_info_plus 플러그인 (`lib/platform/app_info.dart`) | Flutter → OS | 앱 버전·빌드 번호 표시 (내정보 탭) |
+| `catchmyride/live_activity` MethodChannel (`lib/platform/live_activity.dart` ↔ `ios/Runner/LiveActivityBridge.swift`) | Flutter → OS | 하차 알림 트립 잠금화면 Live Activity 시작·갱신·종료 (FR-705, iOS 16.1+). Android·미지원은 조용히 무시 |
 
 ## 위젯·Live Activity 데이터 계약
 
 - 공유 저장소: iOS App Group `group.dev.hansw.catchmyride` (가칭) / Android SharedPreferences.
 - Flutter가 쓰고 위젯이 읽는 값: 다음 도착 노선·분, 권장 출발 시각, 경로 라벨. 위젯 쪽 계산 금지.
+- **하차 알림 트립 Live Activity** (`ios/WidgetExtension/`, iOS 16.1+): App Group을 쓰지 않고
+  ActivityKit update로 값을 공급한다 — 계약은 `ios/Runner/TripActivityAttributes.swift`
+  (journeyLabel 고정 + eventStop·remainingStops(null=위치 확인 중)·phase). 갱신 주체는
+  Flutter 트립 폴링(`lib/ui/trip_page.dart`) — 위젯은 표시만. v1 한계: 앱이 살아 있는 동안만
+  갱신되며, 서버 푸시(ActivityKit push token) 갱신은 후속 작업.
 - 필드를 바꾸면 이 절과 Extension 코드를 같은 커밋에서 갱신한다.
 
 ## 명령어

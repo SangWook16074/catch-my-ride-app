@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../data/api.dart';
 import '../data/trip_store.dart';
 import '../domain/journey.dart';
+import '../platform/live_activity.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
 import 'design/components/button.dart';
@@ -32,6 +33,7 @@ class TripPage extends StatefulWidget {
 
 class _TripPageState extends State<TripPage> {
   final TripStore _tripStore = TripStore();
+  final LiveActivityBridge _liveActivity = LiveActivityBridge();
   TripStatus? _status;
   bool _stale = false;
   bool _gone = false;
@@ -40,6 +42,8 @@ class _TripPageState extends State<TripPage> {
   @override
   void initState() {
     super.initState();
+    // 잠금화면 Live Activity 시작 (FR-705) — iOS 16.1 미만·비활성은 브리지가 조용히 무시
+    unawaited(_liveActivity.start(widget.journeyLabel));
     unawaited(_refresh());
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_refresh()));
   }
@@ -61,6 +65,7 @@ class _TripPageState extends State<TripPage> {
       if (!mounted) {
         return;
       }
+      unawaited(_liveActivity.update(status)); // 잠금화면 카운트다운 갱신 (FR-705)
       setState(() {
         _status = status;
         _stale = false;
@@ -70,8 +75,9 @@ class _TripPageState extends State<TripPage> {
         return;
       }
       if (error.status == 404) {
-        // 트립이 서버에서 정리됨 — 종료 안내로 강등, 이어보기 저장도 정리
+        // 트립이 서버에서 정리됨 — 종료 안내로 강등, 이어보기·잠금화면도 정리
         unawaited(_tripStore.clear());
+        unawaited(_liveActivity.end());
         setState(() => _gone = true);
         return;
       }
@@ -106,6 +112,7 @@ class _TripPageState extends State<TripPage> {
 
   Future<void> _end() async {
     unawaited(_tripStore.clear());
+    unawaited(_liveActivity.end());
     try {
       await api.endTrip(widget.tripId);
     } catch (_) {
