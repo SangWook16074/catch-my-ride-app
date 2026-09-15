@@ -1,4 +1,5 @@
 import 'package:catch_my_ride/domain/journey.dart';
+import 'package:catch_my_ride/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _leg = JourneyLeg(line: '9호선 급행', boardStop: '여의도', alightStop: '당산');
@@ -97,5 +98,53 @@ void main() {
     for (final phase in TripPhase.values) {
       expect(TripPhase.fromWire(phase.wire), phase);
     }
+  });
+
+  test('dayOfWeekFrom — DateTime.weekday(1=월…7=일) 매핑', () {
+    expect(dayOfWeekFrom(DateTime(2026, 9, 14)), DayOfWeek.mon); // 월요일
+    expect(dayOfWeekFrom(DateTime(2026, 9, 15)), DayOfWeek.tue);
+    expect(dayOfWeekFrom(DateTime(2026, 9, 20)), DayOfWeek.sun); // 일요일
+  });
+
+  group('pickBoardingJourney — "탔어요" 브리지 여정 선택', () {
+    Journey journey(String id, List<DayOfWeek> repeatDays) => Journey(
+      id: id,
+      label: id,
+      repeatDays: repeatDays,
+      legs: const [
+        JourneyLeg(line: '9호선 급행', boardStop: '여의도', alightStop: '당산'),
+      ],
+      lastUsedAt: null,
+    );
+
+    final tuesday = DateTime(2026, 9, 15); // 화요일
+
+    test('오늘 요일에 반복되는 여정 우선 — 목록 순서(lastUsedAt 내림차순) 유지', () {
+      final picked = pickBoardingJourney([
+        journey('반복없음', const []),
+        journey('화요일-첫째', const [DayOfWeek.tue]),
+        journey('화요일-둘째', const [DayOfWeek.tue]),
+      ], tuesday);
+      expect(picked?.id, '화요일-첫째');
+    });
+
+    test('오늘 요일 여정이 없으면 반복 없는 여정으로', () {
+      final picked = pickBoardingJourney([
+        journey('월요일', const [DayOfWeek.mon]),
+        journey('반복없음', const []),
+      ], tuesday);
+      expect(picked?.id, '반복없음');
+    });
+
+    test('다른 요일 전용 여정만 있으면 권하지 않는다', () {
+      final picked = pickBoardingJourney([
+        journey('월요일', const [DayOfWeek.mon]),
+      ], tuesday);
+      expect(picked, isNull);
+    });
+
+    test('여정이 없으면 null', () {
+      expect(pickBoardingJourney(const [], tuesday), isNull);
+    });
   });
 }

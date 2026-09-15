@@ -131,8 +131,15 @@ class _JourneyPageState extends State<JourneyPage> {
   }
 
   Future<void> _openTrip(String tripId) async {
+    // 보관된 여정 id가 있으면 같이 넘긴다 — LOST 화면 "처음부터 다시 추적" 진입점
+    final journeyId = await _tripStore.readJourneyId();
+    if (!mounted) {
+      return;
+    }
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => TripPage(tripId: tripId)),
+      MaterialPageRoute<void>(
+        builder: (_) => TripPage(tripId: tripId, journeyId: journeyId),
+      ),
     );
     unawaited(_load());
   }
@@ -152,14 +159,17 @@ class _JourneyPageState extends State<JourneyPage> {
     try {
       final start = await api.startTrip(journey.id);
       // 이어보기·메인 요약 카드용 로컬 보관 (서버에 활성 트립 조회가 없다 — §9)
-      unawaited(_tripStore.write(start.tripId));
+      unawaited(_tripStore.write(start.tripId, journeyId: journey.id));
       if (!mounted) {
         return;
       }
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) =>
-              TripPage(tripId: start.tripId, journeyLabel: journey.label),
+          builder: (_) => TripPage(
+            tripId: start.tripId,
+            journeyLabel: journey.label,
+            journeyId: journey.id,
+          ),
         ),
       );
       // 트립에서 돌아오면 히스토리(lastUsedAt) 순서를 반영

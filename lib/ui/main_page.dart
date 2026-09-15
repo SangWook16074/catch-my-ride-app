@@ -156,8 +156,15 @@ class _MainPageState extends State<MainPage> {
 
   Future<void> _openTrip(String tripId) async {
     HapticFeedback.selectionClick();
+    // 보관된 여정 id가 있으면 같이 넘긴다 — LOST 화면 "처음부터 다시 추적" 진입점
+    final journeyId = await _tripStore.readJourneyId();
+    if (!mounted) {
+      return;
+    }
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => TripPage(tripId: tripId)),
+      MaterialPageRoute<void>(
+        builder: (_) => TripPage(tripId: tripId, journeyId: journeyId),
+      ),
     );
     unawaited(_load());
   }

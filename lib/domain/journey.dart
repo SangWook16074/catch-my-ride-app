@@ -108,6 +108,28 @@ String journeyPathSummary(List<JourneyLeg> legs) {
   return parts.join(' → ');
 }
 
+/// DateTime.weekday(1=월 … 7=일) → DayOfWeek
+DayOfWeek dayOfWeekFrom(DateTime date) => DayOfWeek.values[date.weekday - 1];
+
+/// "탔어요" 탑승 피드백 직후 하차 알림으로 이어줄 여정 선택 (2026-09-15 실주행 피드백 —
+/// 탑승 순간이 열차 특정(§9-2 후보 스냅샷)에 가장 유리한 시작 타이밍이다).
+/// 오늘 요일에 반복되는 여정 우선, 없으면 반복 없는 여정 — 각각 목록 순서(서버가
+/// lastUsedAt 내림차순 정렬, §9-1)가 우선순위. 다른 요일 전용 여정은 권하지 않는다.
+Journey? pickBoardingJourney(List<Journey> journeys, DateTime now) {
+  final today = dayOfWeekFrom(now);
+  for (final journey in journeys) {
+    if (journey.repeatDays.contains(today)) {
+      return journey;
+    }
+  }
+  for (final journey in journeys) {
+    if (journey.repeatDays.isEmpty) {
+      return journey;
+    }
+  }
+  return null;
+}
+
 /// 하차 푸시 딥링크(`catchmyride://trip?tripId=…`) 파싱 — 트립 링크가 아니면 null (API.md §9-4)
 String? parseTripLink(Uri? uri) {
   if (uri == null || uri.host != 'trip') {

@@ -10,6 +10,7 @@ import '../platform/live_activity.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
 import 'design/components/button.dart';
+import 'design/components/sheet.dart';
 import 'design/tokens.dart';
 
 /// 트립 폴링 주기 — FR-204 준용(15~30초). 하차 판정·푸시는 서버 몫, 화면은 표시만
@@ -22,26 +23,33 @@ class TripPage extends StatefulWidget {
     required this.tripId,
     // 푸시 딥링크 진입은 여정 라벨을 모른다 — 기능명으로 대체
     this.journeyLabel = '하차 알림',
+    this.journeyId,
   });
 
   final String tripId;
   final String journeyLabel;
 
+  /// 이 트립의 여정 — 있으면 LOST 화면에서 "처음부터 다시 추적"(같은 여정 재시작)을 제공한다.
+  /// 푸시 딥링크 진입 등 모르는 경우 null — 버튼을 숨긴다
+  final String? journeyId;
+
   @override
   State<TripPage> createState() => _TripPageState();
 }
 
-class _TripPageState extends State<TripPage> {
+class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
   final TripStore _tripStore = TripStore();
   final LiveActivityBridge _liveActivity = LiveActivityBridge();
   TripStatus? _status;
   bool _stale = false;
   bool _gone = false;
+  bool _restarting = false;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 잠금화면 표면 시작 (FR-705) — iOS Live Activity / Android 지속 알림, 미지원은 조용히 무시
     unawaited(_liveActivity.start(widget.journeyLabel, tripId: widget.tripId));
     unawaited(_refresh());
@@ -50,8 +58,18 @@ class _TripPageState extends State<TripPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 잠금·백그라운드 동안 타이머가 멈춘다 — 돌아오면 다음 틱을 기다리지 않고 즉시 갱신
+    // (2026-09-15 실주행 피드백: 지하철에서 폰을 껐다 켜면 화면이 낡아 보였다)
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refresh());
+    }
   }
 
   Future<void> _refresh() async {
@@ -108,6 +126,72 @@ class _TripPageState extends State<TripPage> {
       }
       setState(() => _stale = true);
     }
+  }
+
+  /// LOST에서 같은 여정으로 처음부터 다시 시작 — 기존 트립 종료(멱등, §9-3) 후 새 트립.
+  /// 서버가 재목격 복구를 계속 시도하므로(§9-3) 이 버튼은 "기다리기 싫을 때"의 출구다
+  Future<void> _restart() async {
+    final journeyId = widget.journeyId;
+    if (journeyId == null || _restarting) {
+      return;
+    }
+    setState(() => _restarting = true);
+    HapticFeedback.mediumImpact();
+    try {
+      await api.endTrip(widget.tripId);
+    } catch (_) {
+      // 종료 실패해도 진행 — startTrip이 막히면 아래에서 안내한다
+    }
+    try {
+      final start = await api.startTrip(journeyId);
+      unawaited(_tripStore.write(start.tripId, journeyId: journeyId));
+      unawaited(_liveActivity.end());
+      if (!mounted) {
+        return;
+      }
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => TripPage(
+            tripId: start.tripId,
+            journeyLabel: widget.journeyLabel,
+            journeyId: journeyId,
+          ),
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _restarting = false);
+      _showMessage('다시 시작할 수 없어요', error.message);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _restarting = false);
+      _showMessage('다시 시작할 수 없어요', '네트워크를 확인하고 다시 시도해주세요');
+    }
+  }
+
+  void _showMessage(String header, String body) {
+    unawaited(
+      showAppSheet<void>(
+        context: context,
+        header: header,
+        builder: (sheetContext) => Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.xl,
+            0,
+            AppSpace.xl,
+            AppSpace.lg,
+          ),
+          child: Text(
+            body,
+            style: AppTypo.bodySm.copyWith(color: sheetContext.colors.inkMuted),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _end() async {
@@ -224,10 +308,18 @@ class _TripPageState extends State<TripPage> {
           button: AppButton(label: '완료', block: true, onPressed: () => unawaited(_end())),
         );
       case TripPhase.lost:
+        // 서버가 재목격·재특정을 계속 시도한다 (§9-3) — 신호가 돌아오면 이 화면은 저절로 풀린다
         return _message(
-          title: '추적할 수 없어요',
-          subtitle: '실시간 정보가 끊겼어요 — 역 안내방송을 확인해주세요',
-          button: null,
+          title: '추적이 잠시 끊겼어요',
+          subtitle: '신호가 다시 잡히면 자동으로 이어가요.\n그동안 역 안내방송을 확인해주세요',
+          button: widget.journeyId == null
+              ? null
+              : AppButton(
+                  label: _restarting ? '다시 시작하는 중…' : '처음부터 다시 추적',
+                  variant: AppButtonVariant.tonal,
+                  block: true,
+                  onPressed: _restarting ? null : () => unawaited(_restart()),
+                ),
         );
     }
   }

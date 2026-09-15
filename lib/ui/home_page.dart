@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../data/api.dart';
 import '../data/suggestion_store.dart';
+import '../data/trip_store.dart';
 import '../domain/buffer_suggestion.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
@@ -35,8 +36,9 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final SuggestionStore _suggestionStore = SuggestionStore();
+  final TripStore _tripStore = TripStore();
 
   _Phase _phase = _Phase.loading;
   ArrivalsResponse? _response;
@@ -64,6 +66,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_refresh());
     unawaited(_checkBufferSuggestion());
     unawaited(_initDeepLinks());
@@ -72,10 +75,19 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     unawaited(_linkSub?.cancel());
     unawaited(_pushLinkSub?.cancel());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 잠금·백그라운드 동안 폴링 타이머가 멈춘다 — 돌아오면 즉시 갱신 (2026-09-15 실주행 피드백)
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refresh());
+    }
   }
 
   /// 딥링크 진입(catchmyride://open?from=push&notifiedDate=…) —
@@ -104,11 +116,7 @@ class _HomePageState extends State<HomePage> {
     // 탑승 피드백 프롬프트(from=push)와는 별개 흐름
     final tripId = parseTripLink(uri);
     if (tripId != null) {
-      unawaited(
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => TripPage(tripId: tripId)),
-        ),
-      );
+      unawaited(_openTripLink(tripId));
       return;
     }
     final entry = parsePushEntry(uri);
@@ -168,6 +176,22 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 트립 딥링크 진입 — 로컬 보관이 같은 트립이면 여정 id도 같이 넘긴다
+  /// (LOST 화면 "처음부터 다시 추적" 진입점)
+  Future<void> _openTripLink(String tripId) async {
+    final storedTripId = await _tripStore.read();
+    final journeyId =
+        storedTripId == tripId ? await _tripStore.readJourneyId() : null;
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TripPage(tripId: tripId, journeyId: journeyId),
       ),
     );
   }
@@ -263,8 +287,115 @@ class _HomePageState extends State<HomePage> {
       setState(() => _todayFeedback = result);
       // 방금 놓침이 기록됐으면 추천이 켜졌을 수 있다 — 바로 다시 판정
       unawaited(_checkBufferSuggestion());
+      if (result == BoardingResult.boarded) {
+        // 탑승 = 하차 알림을 시작할 최적 타이밍 (열차 특정 후보 스냅샷, §9-2) —
+        // 오늘 맞는 여정이 있으면 바로 이어준다 (2026-09-15 실주행 피드백)
+        unawaited(_maybeOfferTripStart());
+      }
     } catch (_) {
       // 전송 실패 — 완료 상태로 표시하지 않아 버튼이 남고, 다시 누르면 재시도된다
+    }
+  }
+
+  /// "탔어요" → 하차 알림 브리지 — 오늘 요일에 맞는 여정을 골라 시작을 제안한다.
+  /// 여정이 없거나 §9 미배포(404)·네트워크 실패면 조용히 생략 — 피드백 본편을 막지 않는다
+  Future<void> _maybeOfferTripStart() async {
+    List<Journey> journeys;
+    try {
+      journeys = await api.listJourneys();
+    } catch (_) {
+      return;
+    }
+    final journey = pickBoardingJourney(journeys, DateTime.now());
+    if (journey == null || !mounted) {
+      return;
+    }
+    final start = await showAppSheet<bool>(
+      context: context,
+      header: '하차 알림도 시작할까요?',
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.xl,
+          0,
+          AppSpace.xl,
+          AppSpace.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${journey.label} · ${journeyPathSummary(journey.legs)}\n'
+              '내릴 역이 가까워지면 알려드려요',
+              style: AppTypo.bodySm.copyWith(
+                color: sheetContext.colors.inkMuted,
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: '시작',
+                    medium: true,
+                    block: true,
+                    onPressed: () => Navigator.of(sheetContext).pop(true),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: AppButton(
+                    label: '괜찮아요',
+                    variant: AppButtonVariant.tonal,
+                    medium: true,
+                    block: true,
+                    onPressed: () => Navigator.of(sheetContext).pop(false),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (start != true || !mounted) {
+      return;
+    }
+    await _startJourneyTrip(journey);
+  }
+
+  Future<void> _startJourneyTrip(Journey journey) async {
+    // 햅틱: 트립 시작 = 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
+    HapticFeedback.mediumImpact();
+    try {
+      final start = await api.startTrip(journey.id);
+      unawaited(_tripStore.write(start.tripId, journeyId: journey.id));
+      if (!mounted) {
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TripPage(
+            tripId: start.tripId,
+            journeyLabel: journey.label,
+            journeyId: journey.id,
+          ),
+        ),
+      );
+    } on ApiException {
+      // 이미 진행 중 트립이 있음(§9-2 동시 1개) — 보관된 트립 이어보기로 유도
+      final tripId = await _tripStore.read();
+      final journeyId = await _tripStore.readJourneyId();
+      if (!mounted || tripId == null) {
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TripPage(tripId: tripId, journeyId: journeyId),
+        ),
+      );
+    } catch (_) {
+      // 네트워크 실패 — 조용히 생략, 하차 알림 탭에서 다시 시작할 수 있다
     }
   }
 
