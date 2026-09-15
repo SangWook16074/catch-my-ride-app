@@ -288,13 +288,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       setState(() => _todayFeedback = result);
       // 방금 놓침이 기록됐으면 추천이 켜졌을 수 있다 — 바로 다시 판정
       unawaited(_checkBufferSuggestion());
-      if (result == BoardingResult.boarded) {
-        // 탑승 = 하차 알림을 시작할 최적 타이밍 (열차 특정 후보 스냅샷, §9-2) —
-        // 오늘 맞는 여정이 있으면 바로 이어준다 (2026-09-15 실주행 피드백)
-        unawaited(_maybeOfferTripStart());
-      }
     } catch (_) {
       // 전송 실패 — 완료 상태로 표시하지 않아 버튼이 남고, 다시 누르면 재시도된다
+    }
+    // 탑승 = 하차 알림을 시작할 최적 타이밍 (열차 특정 후보 스냅샷, §9-2).
+    // 피드백 전송 결과와 무관하게 이어준다 — 오늘 발송 알림이 없으면 피드백은
+    // 400("해당 날짜에 발송된 알림이 없습니다")인데, 그 때문에 브리지까지 침묵하면
+    // 버튼이 죽어 보인다 (2026-09-15 실기기 확인)
+    if (result == BoardingResult.boarded && mounted) {
+      unawaited(_maybeOfferTripStart());
     }
   }
 
