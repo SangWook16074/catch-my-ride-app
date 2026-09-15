@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 
 import 'data/push_registrar.dart';
 import 'firebase_options.dart';
+import 'platform/ads.dart';
 import 'ui/design/theme.dart';
 import 'ui/startup_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // AdMob — 시작 비차단, 실패해도 본편 동작 (광고만 안 나온다)
+  unawaited(Ads.init());
   // Firebase — 푸시(FCM) 기반. 초기화 실패(설정 파일 문제 등)해도 본편(라이브 뷰)은
   // 동작해야 하므로 앱을 죽이지 않는다 — 푸시만 못 받는 상태로 강등된다.
   try {

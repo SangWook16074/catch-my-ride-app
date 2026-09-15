@@ -8,6 +8,7 @@ import '../domain/models.dart';
 import '../domain/time_format.dart';
 import '../platform/app_info.dart';
 import '../platform/push.dart';
+import 'components/ad_banner.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/components/list_row.dart';
@@ -208,6 +209,8 @@ class _MyInfoPageState extends State<MyInfoPage> {
                 ),
               ),
             ),
+            // 광고는 설정 콘텐츠가 끝난 뒤 — 저관여 화면의 자연 경계
+            const AdBanner(),
           ],
         ),
       ),

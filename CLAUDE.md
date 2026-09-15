@@ -82,6 +82,7 @@ lib/
 | firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |
 | package_info_plus 플러그인 (`lib/platform/app_info.dart`) | Flutter → OS | 앱 버전·빌드 번호 표시 (내정보 탭) |
 | `catchmyride/live_activity` MethodChannel (`lib/platform/live_activity.dart` ↔ iOS `LiveActivityBridge.swift` / Android `TripNotificationBridge.kt`) | Flutter → OS | 하차 알림 트립 잠금화면 표면 시작·갱신·종료 (FR-705) — iOS 16.1+ Live Activity, Android 지속(ongoing) 무음 알림(탭 = 트립 딥링크). 미지원은 조용히 무시 |
+| google_mobile_ads 플러그인 (`lib/platform/ads.dart`, 배너 위젯 `lib/ui/components/ad_banner.dart`) | Flutter → OS | AdMob 배너 — ADR-001 Platform View 허용 목록(광고). 4개 탭 스크롤 끝에만 배치, 트립 진행·온보딩엔 금지. ⚠️ 현재 테스트 ID — 실계정 발급 후 ads.dart + Manifest/Info.plist 교체 |
 
 ## 위젯·Live Activity 데이터 계약
 

@@ -7,6 +7,7 @@ import '../data/api.dart';
 import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
+import 'components/ad_banner.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/components/sheet.dart';
@@ -398,6 +399,8 @@ class _JourneyPageState extends State<JourneyPage> {
                 onPressed: () => unawaited(_openCreate()),
               ),
             ),
+          // 광고는 여정 목록·만들기 버튼 아래 — 시작 동선을 가로막지 않는다
+          const AdBanner(),
         ];
     }
   }

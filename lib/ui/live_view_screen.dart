@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/live_view.dart';
 import '../domain/models.dart';
+import 'components/ad_banner.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/tokens.dart';
@@ -129,6 +130,9 @@ class LiveViewScreen extends StatelessWidget {
           ),
 
         for (final arrival in response.arrivals) _ArrivalRow(arrival: arrival),
+
+        // 광고는 도착 목록이 끝난 뒤 — 핵심 정보(탈 수 있는 차)를 절대 밀어내지 않는다
+        const AdBanner(),
 
         Padding(
           padding: const EdgeInsets.only(top: AppSpace.lg),

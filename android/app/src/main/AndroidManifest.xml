@@ -35,6 +35,10 @@
                 <data android:scheme="catchmyride"/>
             </intent-filter>
         </activity>
+        <!-- AdMob 앱 ID — ⚠️ 구글 테스트 ID. 오너가 실계정 발급 후 교체 (lib/platform/ads.dart 참조) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

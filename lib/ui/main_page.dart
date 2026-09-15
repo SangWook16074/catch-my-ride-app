@@ -8,6 +8,7 @@ import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
+import 'components/ad_banner.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/tokens.dart';
@@ -248,6 +249,8 @@ class _MainPageState extends State<MainPage> {
                   ),
                 ),
               ),
+            // 광고는 요약 콘텐츠 아래 — 대시보드 정보를 밀어내지 않는 자연 경계
+            const AdBanner(),
           ],
         ),
       ),
