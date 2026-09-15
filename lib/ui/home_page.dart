@@ -292,19 +292,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // 전송 실패 — 완료 상태로 표시하지 않아 버튼이 남고, 다시 누르면 재시도된다
     }
     // 탑승 = 하차 알림을 시작할 최적 타이밍 (열차 특정 후보 스냅샷, §9-2).
-    // 피드백 전송 결과와 무관하게 이어준다 — 오늘 발송 알림이 없으면 피드백은
-    // 400("해당 날짜에 발송된 알림이 없습니다")인데, 그 때문에 브리지까지 침묵하면
+    // 피드백 전송 결과와 무관하게 이어준다 — 전송이 실패해도 브리지까지 침묵하면
     // 버튼이 죽어 보인다 (2026-09-15 실기기 확인)
     if (result == BoardingResult.boarded && mounted) {
-      unawaited(_maybeOfferTripStart());
+      unawaited(_maybeStartTrip());
     }
   }
 
-  /// "탔어요" → 하차 알림 브리지 — 오늘 요일에 맞는 여정을 골라 시작을 제안한다.
-  /// §9 미배포(404)·네트워크 실패만 조용히 생략 — 맞는 여정이 없으면 만들기로 유도한다
-  /// (2026-09-15 실기기: 조용히 생략하면 버튼이 "반응 없음"으로 느껴진다).
+  /// "탔어요" → 하차 알림 브리지 — 오늘 요일에 맞는 여정이 있으면 묻지 않고 바로
+  /// 트립을 시작한다 (오너 결정 2026-09-15: "탔어요" = 탑승 확정, 별도 확인은 군더더기).
+  /// 맞는 여정이 없으면 만들기로 유도 — 조용히 생략하면 버튼이 "반응 없음"으로 느껴진다.
+  /// §9 미배포(404)·네트워크 실패만 조용히 생략.
   /// [offerCreate]는 여정 생성 직후 재진입에서 false — 그래도 안 맞으면 그만 묻는다
-  Future<void> _maybeOfferTripStart({bool offerCreate = true}) async {
+  Future<void> _maybeStartTrip({bool offerCreate = true}) async {
     List<Journey> journeys;
     try {
       journeys = await api.listJourneys();
@@ -319,57 +319,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (offerCreate) {
         await _offerJourneyCreate();
       }
-      return;
-    }
-    final start = await showAppSheet<bool>(
-      context: context,
-      header: '하차 알림도 시작할까요?',
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpace.xl,
-          0,
-          AppSpace.xl,
-          AppSpace.lg,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${journey.label} · ${journeyPathSummary(journey.legs)}\n'
-              '내릴 역이 가까워지면 알려드려요',
-              style: AppTypo.bodySm.copyWith(
-                color: sheetContext.colors.inkMuted,
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            Row(
-              children: [
-                Expanded(
-                  child: AppButton(
-                    label: '시작',
-                    medium: true,
-                    block: true,
-                    onPressed: () => Navigator.of(sheetContext).pop(true),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Expanded(
-                  child: AppButton(
-                    label: '괜찮아요',
-                    variant: AppButtonVariant.tonal,
-                    medium: true,
-                    block: true,
-                    onPressed: () => Navigator.of(sheetContext).pop(false),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-    if (start != true || !mounted) {
       return;
     }
     await _startJourneyTrip(journey);
@@ -432,8 +381,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       MaterialPageRoute(builder: (_) => const JourneyCreatePage()),
     );
     if (created == true && mounted) {
-      // 방금 만든 여정으로 시작 제안 — 그래도 오늘과 안 맞으면(다른 요일 반복) 그만 묻는다
-      await _maybeOfferTripStart(offerCreate: false);
+      // 방금 만든 여정으로 바로 시작 — 그래도 오늘과 안 맞으면(다른 요일 반복) 그만 묻는다
+      await _maybeStartTrip(offerCreate: false);
     }
   }
 
