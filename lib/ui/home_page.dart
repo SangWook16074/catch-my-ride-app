@@ -557,7 +557,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.colors.background,
-      body: SafeArea(child: _body()),
+      // bottom: false — 루트 셸 글라스 네비 밑으로 콘텐츠가 흐른다 (라이브 뷰 ListView가 하단 패딩 담당)
+      body: SafeArea(bottom: false, child: _body()),
     );
   }
 

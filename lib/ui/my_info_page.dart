@@ -146,11 +146,15 @@ class _MyInfoPageState extends State<MyInfoPage> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
+      bottom: false, // 콘텐츠가 글라스 네비 밑으로 흐른다 — 하단 여백은 ListView padding이 담당
       child: RefreshIndicator.adaptive(
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(top: AppSpace.md),
+          padding: EdgeInsets.only(
+            top: AppSpace.md,
+            bottom: MediaQuery.paddingOf(context).bottom + AppSpace.lg,
+          ),
           children: [
             const Padding(
               padding: EdgeInsets.fromLTRB(

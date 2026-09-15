@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'design/components/glass_nav_bar.dart';
 import 'design/tokens.dart';
 import 'home_page.dart';
 import 'journey_page.dart';
@@ -40,37 +41,35 @@ class _RootShellState extends State<RootShell> {
     ];
     return Scaffold(
       backgroundColor: context.colors.background,
+      // 콘텐츠가 글라스 네비 아래로 흐르게 — 각 탭은 SafeArea(bottom: false) +
+      // 스크롤 하단 패딩(MediaQuery.padding.bottom)으로 마지막 항목을 피한다
+      extendBody: true,
       body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: context.colors.line)),
-        ),
-        child: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _select,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: '메인',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.directions_bus_outlined),
-              selectedIcon: Icon(Icons.directions_bus),
-              label: '놓치지마',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.subway_outlined),
-              selectedIcon: Icon(Icons.subway),
-              label: '하차 알림',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outlined),
-              selectedIcon: Icon(Icons.person),
-              label: '내정보',
-            ),
-          ],
-        ),
+      bottomNavigationBar: GlassNavBar(
+        selectedIndex: _index,
+        onSelect: _select,
+        items: const [
+          GlassNavItem(
+            icon: Icons.home_outlined,
+            selectedIcon: Icons.home,
+            label: '메인',
+          ),
+          GlassNavItem(
+            icon: Icons.directions_bus_outlined,
+            selectedIcon: Icons.directions_bus,
+            label: '놓치지마',
+          ),
+          GlassNavItem(
+            icon: Icons.subway_outlined,
+            selectedIcon: Icons.subway,
+            label: '하차 알림',
+          ),
+          GlassNavItem(
+            icon: Icons.person_outlined,
+            selectedIcon: Icons.person,
+            label: '내정보',
+          ),
+        ],
       ),
     );
   }

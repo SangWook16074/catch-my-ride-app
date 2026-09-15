@@ -55,7 +55,8 @@ lib/
   참조하는 코드는 다크 모드가 깨지므로 금지. 타이포(AppTypo)는 색을 갖지 않는다 —
   기본 글자색은 테마 DefaultTextStyle(ink), 다른 색은 copyWith로.
 - 원본은 `lib/ui/design/` — `tokens.dart`(컬러·타이포·간격·라운드)와
-  `components/`(버튼·칩·카드·시트·입력·리스트 행 프리미티브).
+  `components/`(버튼·칩·카드·시트·입력·리스트 행·글라스 네비게이션 바 프리미티브).
+  글라스 표현(`glass`/`glassStroke` 토큰 + BackdropFilter)은 ADR-001 근사치 한도 안에서만.
 - 화면·컴포넌트는 **토큰만 쓴다**: `Color(0x...)`/`fontSize` 하드코딩 금지, 컬러 교체는
   `tokens.dart` 한 파일로 끝나야 한다. 타이포는 역할 이름(title/body/caption) — TDS의
   t3/t5 번호 체계를 들여오지 않는다.

@@ -1,5 +1,6 @@
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
+import 'package:catch_my_ride/ui/design/components/glass_nav_bar.dart';
 import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/root_shell.dart';
 import 'package:flutter/material.dart';
@@ -21,14 +22,14 @@ void main() {
 
   /// 페이지 안 텍스트와 겹칠 수 있으니 탭은 네비게이션 바 안에서만 찾아 누른다
   Finder navLabel(String label) => find.descendant(
-    of: find.byType(NavigationBar),
+    of: find.byType(GlassNavBar),
     matching: find.text(label),
   );
 
   testWidgets('바텀 네비게이션에 4개 탭이 있다', (tester) async {
     await pumpShell(tester);
 
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(GlassNavBar), findsOneWidget);
     for (final label in ['메인', '놓치지마', '하차 알림', '내정보']) {
       expect(navLabel(label), findsOneWidget);
     }

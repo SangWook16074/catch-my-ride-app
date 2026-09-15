@@ -50,7 +50,11 @@ class LiveViewScreen extends StatelessWidget {
     final best = pickBestBoardable(response.arrivals);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
+      // 하단은 글라스 네비 높이(MediaQuery.padding.bottom)까지 비워 마지막 행이 가려지지 않게
+      padding: EdgeInsets.only(
+        top: AppSpace.lg,
+        bottom: AppSpace.lg + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         // 헤더 — 제목 + 삭제/재설정 진입점
         Padding(

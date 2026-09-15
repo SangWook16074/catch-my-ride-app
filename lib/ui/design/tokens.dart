@@ -35,6 +35,8 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.fill,
     required this.fillStrong,
     required this.line,
+    required this.glass,
+    required this.glassStroke,
   });
 
   // 브랜드 — 딥그린 (주인공)
@@ -95,6 +97,13 @@ class AppColors extends ThemeExtension<AppColors> {
   /// 카드 테두리·구분선
   final Color line;
 
+  /// 리퀴드 글라스 근사 면 — 반투명 surface, 반드시 블러(BackdropFilter)와 함께 쓴다
+  /// (ADR-001: 인앱 글라스는 블러+반투명 근사치까지)
+  final Color glass;
+
+  /// 글라스 면 가장자리 하이라이트 — 유리 두께감을 주는 헤어라인
+  final Color glassStroke;
+
   /// 라이트 — 순백 바탕 + 그린(#42D674) + 코랄.
   /// 중성은 순수 무채색 (오너 결정 2026-09-09: 배경에 초록 기를 끼얹지 않는다)
   static const AppColors light = AppColors(
@@ -118,6 +127,8 @@ class AppColors extends ThemeExtension<AppColors> {
     fill: Color(0xFFF2F2F2),
     fillStrong: Color(0xFFE4E4E4),
     line: Color(0xFFE7E7E7),
+    glass: Color(0xCCFFFFFF),
+    glassStroke: Color(0x14000000),
   );
 
   /// 다크 — 검은 바탕 + 밝힌 그린/코랄 (strong = 다크에서 더 밝게).
@@ -143,6 +154,8 @@ class AppColors extends ThemeExtension<AppColors> {
     fill: Color(0xFF1F1F1F),
     fillStrong: Color(0xFF2A2A2A),
     line: Color(0xFF262626),
+    glass: Color(0xCC161616),
+    glassStroke: Color(0x26FFFFFF),
   );
 
   @override
@@ -167,6 +180,8 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? fill,
     Color? fillStrong,
     Color? line,
+    Color? glass,
+    Color? glassStroke,
   }) =>
       AppColors(
         primary: primary ?? this.primary,
@@ -189,6 +204,8 @@ class AppColors extends ThemeExtension<AppColors> {
         fill: fill ?? this.fill,
         fillStrong: fillStrong ?? this.fillStrong,
         line: line ?? this.line,
+        glass: glass ?? this.glass,
+        glassStroke: glassStroke ?? this.glassStroke,
       );
 
   @override
@@ -216,6 +233,8 @@ class AppColors extends ThemeExtension<AppColors> {
       fill: mix(fill, other.fill),
       fillStrong: mix(fillStrong, other.fillStrong),
       line: mix(line, other.line),
+      glass: mix(glass, other.glass),
+      glassStroke: mix(glassStroke, other.glassStroke),
     );
   }
 }
