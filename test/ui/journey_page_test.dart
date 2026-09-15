@@ -67,16 +67,23 @@ void main() {
     await pumpPage(tester);
 
     await tester.tap(find.text('시작'));
-    await tester.pumpAndSettle();
+    // 위치 확인 중 화면은 구간 스트립 애니메이션이 계속 돌아 pumpAndSettle이 끝나지 않는다
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     // 첫 폴링 = 열차 특정 전(위치 확인 중, §9-3)
     expect(find.byType(TripPage), findsOneWidget);
     expect(find.text('당산에서 내려요'), findsOneWidget);
     expect(find.text('위치 확인 중이에요…'), findsOneWidget);
+    // 구간 스트립 — 탑승역·노선으로 이동 맥락을 채운다
+    expect(find.text('여의도'), findsOneWidget);
+    expect(find.text('9호선 급행'), findsOneWidget);
 
     // 20초 폴링마다 전진: 2정거장 → 다음 역(ARRIVING) → 하차(단일 구간 = DONE)
     await tester.pump(const Duration(seconds: 20));
     expect(find.text('2정거장 남았어요'), findsOneWidget);
+    // 특정 후엔 현재 위치 역명 (§9-3 currentStop — mock은 탑승역으로 대신한다)
+    expect(find.text('현재 여의도 부근'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 20));
     expect(find.text('다음 역이에요!'), findsOneWidget);
@@ -95,7 +102,9 @@ void main() {
     await pumpPage(tester);
 
     await tester.tap(find.text('시작'));
-    await tester.pumpAndSettle(); // TripPage 첫 폴링 — 위치 확인 중
+    // TripPage 첫 폴링 — 위치 확인 중 (스트립 애니메이션 때문에 pumpAndSettle 불가)
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     await tester.pageBack();
     await tester.pumpAndSettle(); // 목록 복귀 — 이어보기 확인 폴링으로 2정거장

@@ -41,6 +41,10 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
   final TripStore _tripStore = TripStore();
   final LiveActivityBridge _liveActivity = LiveActivityBridge();
   TripStatus? _status;
+
+  /// 이 트립의 여정 — "위치 확인 중" 화면에 구간(탑승역→하차역)을 그리기 위한 표시 보강.
+  /// 푸시 딥링크 진입(journeyId 없음)·조회 실패면 null — 문구만으로 동작한다
+  Journey? _journey;
   bool _stale = false;
   bool _gone = false;
   bool _restarting = false;
@@ -52,8 +56,30 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // 잠금화면 표면 시작 (FR-705) — iOS Live Activity / Android 지속 알림, 미지원은 조용히 무시
     unawaited(_liveActivity.start(widget.journeyLabel, tripId: widget.tripId));
+    unawaited(_loadJourney());
     unawaited(_refresh());
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_refresh()));
+  }
+
+  Future<void> _loadJourney() async {
+    final journeyId = widget.journeyId;
+    if (journeyId == null) {
+      return;
+    }
+    try {
+      final journeys = await api.listJourneys();
+      if (!mounted) {
+        return;
+      }
+      for (final journey in journeys) {
+        if (journey.id == journeyId) {
+          setState(() => _journey = journey);
+          return;
+        }
+      }
+    } catch (_) {
+      // 표시 보강용 — 실패는 조용히 무시, 트립 추적에는 영향 없음
+    }
   }
 
   @override
@@ -256,6 +282,10 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
         final remaining = status.remainingStops;
         // TRACKING + remaining null = 열차 특정 전 "위치 확인 중" — 숫자를 지어내지 않는다 (API.md §9-3)
         final identifying = !arriving && remaining == null;
+        final legs = _journey?.legs;
+        final leg = legs != null && status.legIndex >= 0 && status.legIndex < legs.length
+            ? legs[status.legIndex]
+            : null;
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -284,6 +314,31 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
               const SizedBox(height: AppSpace.sm),
               Text(
                 '내릴 준비를 해주세요',
+                style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
+              ),
+            ],
+            // 특정 후 카운트다운 중 — 열차 현재 위치 역명 (§9-3 currentStop, 모르면 생략)
+            if (!arriving && !identifying && status.currentStop != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                '현재 ${status.currentStop} 부근',
+                textAlign: TextAlign.center,
+                style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
+              ),
+            ],
+            if (identifying) ...[
+              if (leg != null) ...[
+                const SizedBox(height: AppSpace.xl),
+                _IdentifyingRouteStrip(
+                  boardStop: leg.boardStop,
+                  eventStop: status.eventStop,
+                  line: leg.line,
+                ),
+              ],
+              const SizedBox(height: AppSpace.md),
+              Text(
+                '탑승한 열차를 찾고 있어요 — 곧 남은 정거장을 알려드려요',
+                textAlign: TextAlign.center,
                 style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
               ),
             ],
@@ -355,4 +410,133 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+/// "위치 확인 중" 구간 스트립 — 탑승역→하차역 사이를 이동 중이라는 맥락을 채워준다.
+/// 열차 위치는 아직 모른다(§9-3 remaining null) — 점이 진행 방향으로 흘렀다 사라지는
+/// 불확정 애니메이션까지만, 특정 위치를 아는 척하지 않는다 (NFR-03)
+class _IdentifyingRouteStrip extends StatefulWidget {
+  const _IdentifyingRouteStrip({
+    required this.boardStop,
+    required this.eventStop,
+    required this.line,
+  });
+
+  final String boardStop;
+  final String eventStop;
+  final String line;
+
+  @override
+  State<_IdentifyingRouteStrip> createState() => _IdentifyingRouteStripState();
+}
+
+class _IdentifyingRouteStripState extends State<_IdentifyingRouteStrip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Column(
+      children: [
+        Row(
+          children: [
+            Text(widget.boardStop, style: AppTypo.heading),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => CustomPaint(
+                  size: const Size(double.infinity, 20),
+                  painter: _RouteStripPainter(
+                    t: _controller.value,
+                    track: colors.line,
+                    brand: colors.primary,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpace.md),
+            Text(widget.eventStop, style: AppTypo.heading),
+          ],
+        ),
+        const SizedBox(height: AppSpace.sm),
+        Text(
+          widget.line,
+          style: AppTypo.caption.copyWith(color: colors.inkSubtle),
+        ),
+      ],
+    );
+  }
+}
+
+class _RouteStripPainter extends CustomPainter {
+  _RouteStripPainter({
+    required this.t,
+    required this.track,
+    required this.brand,
+  });
+
+  /// 애니메이션 진행(0~1) — 점 위치·양끝 페이드에 함께 쓴다
+  final double t;
+  final Color track;
+  final Color brand;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final y = size.height / 2;
+    const endRadius = 4.0;
+    final start = Offset(endRadius, y);
+    final end = Offset(size.width - endRadius, y);
+    canvas.drawLine(
+      start,
+      end,
+      Paint()
+        ..color = track
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
+    );
+    // 탑승역(지나온 곳)은 채운 점, 하차역(갈 곳)은 링
+    canvas.drawCircle(start, endRadius, Paint()..color = brand);
+    canvas.drawCircle(
+      end,
+      endRadius,
+      Paint()
+        ..color = brand
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+    final progress = Curves.easeInOut.transform(t);
+    final opacity = t < 0.15
+        ? t / 0.15
+        : t > 0.85
+        ? (1 - t) / 0.15
+        : 1.0;
+    final x = start.dx + (end.dx - start.dx) * progress;
+    canvas.drawCircle(
+      Offset(x, y),
+      9,
+      Paint()..color = brand.withValues(alpha: 0.25 * opacity),
+    );
+    canvas.drawCircle(
+      Offset(x, y),
+      5,
+      Paint()..color = brand.withValues(alpha: opacity),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RouteStripPainter oldDelegate) =>
+      oldDelegate.t != t ||
+      oldDelegate.track != track ||
+      oldDelegate.brand != brand;
 }

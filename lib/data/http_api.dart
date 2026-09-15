@@ -325,7 +325,7 @@ TripStatus _tripStatusFromJson(Map<String, dynamic> json) => TripStatus(
   phase: TripPhase.fromWire(json['phase'] as String),
   legIndex: (json['legIndex'] as num).toInt(),
   remainingStops: (json['remainingStops'] as num?)?.toInt(),
-  nextStop: json['nextStop'] as String?,
+  currentStop: json['currentStop'] as String?,
   eventStop: json['eventStop'] as String,
   realtimeAvailable: json['realtimeAvailable'] as bool? ?? true,
   fetchedAt: json['fetchedAt'] as String,

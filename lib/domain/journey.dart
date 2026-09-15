@@ -167,7 +167,7 @@ class TripStatus {
     required this.phase,
     required this.legIndex,
     required this.remainingStops,
-    required this.nextStop,
+    required this.currentStop,
     required this.eventStop,
     required this.realtimeAvailable,
     required this.fetchedAt,
@@ -178,7 +178,9 @@ class TripStatus {
 
   /// 이벤트 역(하차/환승)까지 남은 정거장 — LOST면 null (아는 척 금지, NFR-03)
   final int? remainingStops;
-  final String? nextStop;
+
+  /// 열차 현재 위치 역명 — 특정 후 목격 값, 모르면 null. "현재 ○○ 부근" 표시용 (§9-3)
+  final String? currentStop;
 
   /// 이번 구간의 하차/환승 역명
   final String eventStop;
