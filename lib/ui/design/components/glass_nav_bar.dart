@@ -5,11 +5,15 @@
 /// 두 플랫폼 공통 형태를 쓴다(오너 결정 2026-09-15 리뉴얼): 떠 있는 필은 iOS 26
 /// 글라스 내비의 인상을 주면서도, 아이콘+라벨 상시 노출·선택 필 하이라이트는
 /// Material 3 관성 그대로라 안드로이드 유저에게도 낯설지 않다.
+///
+/// 상호작용: 탭 = 즉시 선택, 가로 스와이프 = 선택 필이 손가락을 따라오고 놓으면
+/// 가까운 탭에 스냅 (오너 요구 2026-09-15). 경계를 넘을 때 selection 햅틱.
 library;
 
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../tokens.dart';
 
@@ -25,7 +29,7 @@ class GlassNavItem {
   final String label;
 }
 
-class GlassNavBar extends StatelessWidget {
+class GlassNavBar extends StatefulWidget {
   const GlassNavBar({
     super.key,
     required this.items,
@@ -37,8 +41,40 @@ class GlassNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
 
+  @override
+  State<GlassNavBar> createState() => _GlassNavBarState();
+}
+
+class _GlassNavBarState extends State<GlassNavBar> {
   /// 유리 뒤 콘텐츠가 뭉개질 만큼만 — 과하면 성능·가독성 둘 다 잃는다
   static const double _blurSigma = 20;
+
+  /// 드래그 중 선택 필의 연속 위치(칸 단위) — null이면 selectedIndex에 정착 상태
+  double? _dragPosition;
+
+  int get _activeIndex => _dragPosition?.round() ?? widget.selectedIndex;
+
+  void _dragTo(double localX, double slotWidth) {
+    final next = (localX / slotWidth - 0.5)
+        .clamp(0.0, (widget.items.length - 1).toDouble());
+    final crossed = _dragPosition != null && _dragPosition!.round() != next.round();
+    setState(() => _dragPosition = next);
+    if (crossed) {
+      HapticFeedback.selectionClick(); // 경계 통과 — 칸이 넘어갔음을 손끝으로
+    }
+  }
+
+  void _endDrag() {
+    final position = _dragPosition;
+    if (position == null) {
+      return;
+    }
+    final snapped = position.round();
+    setState(() => _dragPosition = null);
+    if (snapped != widget.selectedIndex) {
+      widget.onSelect(snapped);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,17 +115,57 @@ class GlassNavBar extends StatelessWidget {
                   horizontal: AppSpace.sm,
                   vertical: AppSpace.sm,
                 ),
-                child: Row(
-                  children: [
-                    for (final (index, item) in items.indexed)
-                      Expanded(
-                        child: _GlassNavButton(
-                          item: item,
-                          selected: index == selectedIndex,
-                          onTap: () => onSelect(index),
-                        ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final slotWidth =
+                        constraints.maxWidth / widget.items.length;
+                    final position =
+                        _dragPosition ?? widget.selectedIndex.toDouble();
+                    final dragging = _dragPosition != null;
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragStart: (details) =>
+                          _dragTo(details.localPosition.dx, slotWidth),
+                      onHorizontalDragUpdate: (details) =>
+                          _dragTo(details.localPosition.dx, slotWidth),
+                      onHorizontalDragEnd: (_) => _endDrag(),
+                      onHorizontalDragCancel: _endDrag,
+                      child: Stack(
+                        children: [
+                          // 선택 필 — 드래그 중엔 손가락을 따라오고, 놓으면 스냅 애니메이션
+                          AnimatedPositioned(
+                            duration: dragging
+                                ? Duration.zero
+                                : const Duration(milliseconds: 250),
+                            curve: Curves.easeOutCubic,
+                            left: position * slotWidth,
+                            top: 0,
+                            bottom: 0,
+                            width: slotWidth,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: colors.primarySoft,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              for (final (index, item) in widget.items.indexed)
+                                Expanded(
+                                  child: _GlassNavButton(
+                                    item: item,
+                                    selected: index == _activeIndex,
+                                    onTap: () => widget.onSelect(index),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
                       ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -122,15 +198,8 @@ class _GlassNavButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-          decoration: BoxDecoration(
-            // 선택 필 — 유리 위에 브랜드 소프트 면이 떠오른다
-            color: selected ? colors.primarySoft : null,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
