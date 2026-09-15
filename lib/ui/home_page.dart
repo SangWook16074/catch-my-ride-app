@@ -299,8 +299,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  /// "탔어요" → 하차 알림 브리지 — 오늘 요일에 맞는 여정이 있으면 묻지 않고 바로
-  /// 트립을 시작한다 (오너 결정 2026-09-15: "탔어요" = 탑승 확정, 별도 확인은 군더더기).
+  /// "탔어요" → 하차 알림 브리지 — 오늘 요일에 맞는 여정을 골라 시작을 제안하고,
+  /// **시트에서 "시작"을 확인한 유저만** 트립으로 넘어간다 (오너 결정 2026-09-15 2차:
+  /// 바로 시작은 당황스럽다 — 피드백 기록은 하되 진입은 확인 후).
   /// 맞는 여정이 없으면 만들기로 유도 — 조용히 생략하면 버튼이 "반응 없음"으로 느껴진다.
   /// §9 미배포(404)·네트워크 실패만 조용히 생략.
   /// [offerCreate]는 여정 생성 직후 재진입에서 false — 그래도 안 맞으면 그만 묻는다
@@ -319,6 +320,58 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (offerCreate) {
         await _offerJourneyCreate();
       }
+      return;
+    }
+    final start = await showAppSheet<bool>(
+      context: context,
+      header: '하차 알림도 시작할까요?',
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.xl,
+          0,
+          AppSpace.xl,
+          AppSpace.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${journey.label} · ${journeyPathSummary(journey.legs)}\n'
+              '내릴 역이 가까워지면 알려드려요',
+              style: AppTypo.bodySm.copyWith(
+                color: sheetContext.colors.inkMuted,
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: '시작',
+                    medium: true,
+                    block: true,
+                    onPressed: () => Navigator.of(sheetContext).pop(true),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: AppButton(
+                    label: '괜찮아요',
+                    variant: AppButtonVariant.tonal,
+                    medium: true,
+                    block: true,
+                    onPressed: () => Navigator.of(sheetContext).pop(false),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    // 시트를 그냥 닫아도(null) 시작하지 않는다 — 명시적 "시작"만 진입
+    if (start != true || !mounted) {
       return;
     }
     await _startJourneyTrip(journey);
