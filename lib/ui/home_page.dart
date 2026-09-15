@@ -18,6 +18,7 @@ import 'design/components/button.dart';
 import 'design/components/chip.dart';
 import 'design/components/sheet.dart';
 import 'design/tokens.dart';
+import 'journey_create_page.dart';
 import 'live_view_screen.dart';
 import 'onboarding_page.dart';
 import 'trip_page.dart';
@@ -298,8 +299,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// "탔어요" → 하차 알림 브리지 — 오늘 요일에 맞는 여정을 골라 시작을 제안한다.
-  /// 여정이 없거나 §9 미배포(404)·네트워크 실패면 조용히 생략 — 피드백 본편을 막지 않는다
-  Future<void> _maybeOfferTripStart() async {
+  /// §9 미배포(404)·네트워크 실패만 조용히 생략 — 맞는 여정이 없으면 만들기로 유도한다
+  /// (2026-09-15 실기기: 조용히 생략하면 버튼이 "반응 없음"으로 느껴진다).
+  /// [offerCreate]는 여정 생성 직후 재진입에서 false — 그래도 안 맞으면 그만 묻는다
+  Future<void> _maybeOfferTripStart({bool offerCreate = true}) async {
     List<Journey> journeys;
     try {
       journeys = await api.listJourneys();
@@ -307,7 +310,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
     final journey = pickBoardingJourney(journeys, DateTime.now());
-    if (journey == null || !mounted) {
+    if (!mounted) {
+      return;
+    }
+    if (journey == null) {
+      if (offerCreate) {
+        await _offerJourneyCreate();
+      }
       return;
     }
     final start = await showAppSheet<bool>(
@@ -362,6 +371,68 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
     await _startJourneyTrip(journey);
+  }
+
+  /// 오늘 시작할 여정이 없을 때 — 만들기로 유도, 만들고 오면 바로 시작 제안으로 이어준다
+  Future<void> _offerJourneyCreate() async {
+    final create = await showAppSheet<bool>(
+      context: context,
+      header: '내릴 역도 알려드릴까요?',
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.xl,
+          0,
+          AppSpace.xl,
+          AppSpace.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '오늘 시작할 여정이 없어요.\n'
+              '여정을 만들어두면 "탔어요" 다음에 바로 하차 알림으로 이어드려요',
+              style: AppTypo.bodySm.copyWith(
+                color: sheetContext.colors.inkMuted,
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: '여정 만들기',
+                    medium: true,
+                    block: true,
+                    onPressed: () => Navigator.of(sheetContext).pop(true),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: AppButton(
+                    label: '괜찮아요',
+                    variant: AppButtonVariant.tonal,
+                    medium: true,
+                    block: true,
+                    onPressed: () => Navigator.of(sheetContext).pop(false),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (create != true || !mounted) {
+      return;
+    }
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const JourneyCreatePage()),
+    );
+    if (created == true && mounted) {
+      // 방금 만든 여정으로 시작 제안 — 그래도 오늘과 안 맞으면(다른 요일 반복) 그만 묻는다
+      await _maybeOfferTripStart(offerCreate: false);
+    }
   }
 
   Future<void> _startJourneyTrip(Journey journey) async {
