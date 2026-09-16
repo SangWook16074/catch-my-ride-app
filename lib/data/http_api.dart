@@ -150,6 +150,20 @@ class HttpNochijimaApi implements NochijimaApi {
   }
 
   @override
+  Future<List<FeedbackEntry>> getFeedbackHistory({int limit = 60}) async {
+    final json =
+        await _get('/api/v1/boarding-feedback/history', {'limit': '$limit'})
+            as Map<String, dynamic>;
+    return [
+      for (final entry in json['entries'] as List<dynamic>)
+        FeedbackEntry(
+          date: (entry as Map<String, dynamic>)['date'] as String,
+          result: BoardingResult.fromWire(entry['result'] as String),
+        ),
+    ];
+  }
+
+  @override
   Future<List<StopSearchResult>> searchStops(String query) async {
     final json =
         await _get('/api/v1/stops/search', {'query': query})

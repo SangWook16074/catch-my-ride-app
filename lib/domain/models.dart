@@ -289,6 +289,18 @@ enum BoardingResult {
   const BoardingResult(this.wire);
 
   final String wire;
+
+  static BoardingResult fromWire(String wire) =>
+      values.firstWhere((result) => result.wire == wire);
+}
+
+/// API.md §3-2 — 탑승 피드백 이력 한 건 (통근 리포트 원본, 서버가 최신순으로 준다)
+class FeedbackEntry {
+  const FeedbackEntry({required this.date, required this.result});
+
+  /// "YYYY-MM-DD"
+  final String date;
+  final BoardingResult result;
 }
 
 /// API.md §3-1 — 여유 버퍼 자동 추천 (최근 피드백 5건 기반, 서버는 제안만)

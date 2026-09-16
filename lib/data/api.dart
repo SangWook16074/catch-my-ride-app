@@ -32,6 +32,9 @@ abstract interface class NochijimaApi {
   /// §3-1 — 최근 놓침이 잦으면 버퍼 +5분 제안. 적용은 §1-2c 경로 수정으로
   Future<BufferRecommendation> getBufferRecommendation();
 
+  /// §3-2 — 피드백 이력 (최신순). 통근 리포트 원본 — 집계는 domain/commute_report.dart
+  Future<List<FeedbackEntry>> getFeedbackHistory({int limit = 60});
+
   /// §5-1 — query 2자 미만이면 400 INVALID_REQUEST. 온보딩 중 설정 없이도 호출 가능
   Future<List<StopSearchResult>> searchStops(String query);
 

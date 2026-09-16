@@ -417,6 +417,16 @@ class MockNochijimaApi implements NochijimaApi {
     _feedbackByDate[request.notifiedDate] = request.result;
   }
 
+  /// §3-2 — 이력 최신순 (서버 규칙과 동일: notified_date 내림차순, limit 캡)
+  @override
+  Future<List<FeedbackEntry>> getFeedbackHistory({int limit = 60}) async {
+    final dates = _feedbackByDate.keys.toList()..sort((a, b) => b.compareTo(a));
+    return [
+      for (final date in dates.take(limit))
+        FeedbackEntry(date: date, result: _feedbackByDate[date]!),
+    ];
+  }
+
   /// §3-1 — 최근 5건 중 MISSED 2건 이상(표본 3건 이상)이면 +5분 제안 (서버 규칙과 동일)
   @override
   Future<BufferRecommendation> getBufferRecommendation() async {
