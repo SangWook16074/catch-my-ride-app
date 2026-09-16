@@ -282,6 +282,9 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
         final remaining = status.remainingStops;
         // TRACKING + remaining null = 열차 특정 전 "위치 확인 중" — 숫자를 지어내지 않는다 (API.md §9-3)
         final identifying = !arriving && remaining == null;
+        // 특정 전이라도 서버가 노선 전체 위치로 후보를 목격하면 currentStop을 준다
+        // (§9-3 2026-09-16 개정) — 카운트는 몰라도 위치는 보여준다
+        final locatedStop = status.currentStop;
         final legs = _journey?.legs;
         final leg = legs != null && status.legIndex >= 0 && status.legIndex < legs.length
             ? legs[status.legIndex]
@@ -299,13 +302,13 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
               arriving
                   ? '다음 역이에요!'
                   : identifying
-                  ? '위치 확인 중이에요…'
+                  ? (locatedStop != null ? '현재 $locatedStop 부근' : '위치 확인 중이에요…')
                   : '$remaining정거장 남았어요',
               textAlign: TextAlign.center,
               style: AppTypo.title.copyWith(
                 color: arriving
                     ? context.colors.cautionStrong
-                    : identifying
+                    : identifying && locatedStop == null
                     ? context.colors.inkSubtle
                     : context.colors.primaryStrong,
               ),
@@ -318,10 +321,10 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
               ),
             ],
             // 특정 후 카운트다운 중 — 열차 현재 위치 역명 (§9-3 currentStop, 모르면 생략)
-            if (!arriving && !identifying && status.currentStop != null) ...[
+            if (!arriving && !identifying && locatedStop != null) ...[
               const SizedBox(height: AppSpace.sm),
               Text(
-                '현재 ${status.currentStop} 부근',
+                '현재 $locatedStop 부근',
                 textAlign: TextAlign.center,
                 style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
               ),
@@ -337,7 +340,9 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
               ],
               const SizedBox(height: AppSpace.md),
               Text(
-                '탑승한 열차를 찾고 있어요 — 곧 남은 정거장을 알려드려요',
+                locatedStop != null
+                    ? '하차역에 가까워지면 남은 정거장을 알려드려요'
+                    : '탑승한 열차를 찾고 있어요 — 곧 남은 정거장을 알려드려요',
                 textAlign: TextAlign.center,
                 style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
               ),

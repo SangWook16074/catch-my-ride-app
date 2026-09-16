@@ -613,8 +613,9 @@ class _MockTrip {
       phase: phase,
       legIndex: legIndex,
       remainingStops: identified ? remainingStops : null,
-      // 실서버 미러: 특정 후에만 현재 위치 역명 — mock은 중간역을 모르니 탑승역으로 대신한다
-      currentStop: identified ? legs[legIndex].boardStop : null,
+      // 실서버 미러(§9-3 2026-09-16 개정): 특정 전에도 단일 후보 노선 목격이면 위치를 준다 —
+      // mock은 중간역을 모르니 탑승역으로 대신한다
+      currentStop: legs[legIndex].boardStop,
       eventStop: legs[legIndex].alightStop,
       realtimeAvailable: true,
       fetchedAt: DateTime.now().toIso8601String(),

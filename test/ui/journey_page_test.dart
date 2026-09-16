@@ -71,10 +71,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    // 첫 폴링 = 열차 특정 전(위치 확인 중, §9-3)
+    // 첫 폴링 = 열차 특정 전 — 카운트는 몰라도 노선 목격 위치는 보여준다 (§9-3 2026-09-16 개정,
+    // mock은 탑승역으로 대신한다)
     expect(find.byType(TripPage), findsOneWidget);
     expect(find.text('당산에서 내려요'), findsOneWidget);
-    expect(find.text('위치 확인 중이에요…'), findsOneWidget);
+    expect(find.text('현재 여의도 부근'), findsOneWidget);
     // 구간 스트립 — 탑승역·노선으로 이동 맥락을 채운다
     expect(find.text('여의도'), findsOneWidget);
     expect(find.text('9호선 급행'), findsOneWidget);
