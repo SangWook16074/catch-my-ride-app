@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../domain/live_view.dart';
 import '../domain/models.dart';
-import 'components/ad_banner.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/tokens.dart';
 
 /// 라이브 뷰 본문 — 미니앱 LiveViewScreen.tsx 이식.
-/// 위젯 배치(헤더 → 안내 배너 → 피드백 카드 → 버퍼 추천 카드 → 도착 목록 → 갱신 시각 푸터)를
-/// 미니앱과 동일하게 유지한다. 스타일은 자체 디자인 시스템(design/tokens.dart).
+/// 위젯 배치(히어로 문구 → 안내 배너 → 피드백 카드 → 버퍼 추천 카드 → 도착 목록 → 갱신 시각
+/// 푸터)를 미니앱과 동일하게 유지한다. 스타일은 자체 디자인 시스템(design/tokens.dart).
+/// 탭 제목·삭제/재설정 액션은 HomePage의 공통 탭 헤더(TabHeader) 담당 (2026-09-16 헤더 통일).
 class LiveViewScreen extends StatelessWidget {
   const LiveViewScreen({
     super.key,
@@ -17,8 +17,8 @@ class LiveViewScreen extends StatelessWidget {
     required this.stale,
     required this.todayFeedback,
     required this.onSubmitFeedback,
-    this.onPressSettings,
-    this.onPressDeleteRoute,
+    this.leading,
+    this.topPadding = AppSpace.lg,
     this.bufferSuggestion,
     this.appliedBufferMinutes,
     this.onApplyBufferSuggestion,
@@ -32,11 +32,11 @@ class LiveViewScreen extends StatelessWidget {
   final BoardingResult? todayFeedback;
   final ValueChanged<BoardingResult> onSubmitFeedback;
 
-  /// 재설정 진입점 — 미지정이면 버튼을 숨긴다
-  final VoidCallback? onPressSettings;
+  /// 히어로 문구 위에 끼우는 위젯(경로 칩 바) — 스크롤에 포함돼 글라스 헤더 뒤로 흐른다
+  final Widget? leading;
 
-  /// 현재 경로 삭제 진입점 — 확인 시트는 페이지 책임. 미지정이면 숨긴다
-  final VoidCallback? onPressDeleteRoute;
+  /// 스크롤 상단 패딩 — 글라스 헤더 아래에서 시작하도록 페이지가 계산해 넘긴다
+  final double topPadding;
 
   /// §3-1 버퍼 자동 추천 — null이면 카드를 숨긴다
   final BufferRecommendation? bufferSuggestion;
@@ -53,11 +53,12 @@ class LiveViewScreen extends StatelessWidget {
     return ListView(
       // 하단은 글라스 네비 높이(MediaQuery.padding.bottom)까지 비워 마지막 행이 가려지지 않게
       padding: EdgeInsets.only(
-        top: AppSpace.lg,
+        top: topPadding,
         bottom: AppSpace.lg + MediaQuery.paddingOf(context).bottom,
       ),
       children: [
-        // 헤더 — 제목 + 삭제/재설정 진입점
+        if (leading != null) ...[leading!, const SizedBox(height: AppSpace.lg)],
+        // 히어로 문구 — 탭 제목(TabHeader) 아래 위계라 heading을 쓴다
         Padding(
           padding: const EdgeInsets.only(
             left: AppSpace.xl,
@@ -67,26 +68,11 @@ class LiveViewScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      best != null
-                          ? '지금 나가면 ${best.routeName} 탈 수 있어요'
-                          : '지금은 탈 수 있는 차가 없어요',
-                      style: AppTypo.title,
-                    ),
-                  ),
-                  if (onPressDeleteRoute != null) ...[
-                    const SizedBox(width: AppSpace.md),
-                    _HeaderAction(label: '삭제', onPressed: onPressDeleteRoute!),
-                  ],
-                  if (onPressSettings != null) ...[
-                    const SizedBox(width: AppSpace.md),
-                    _HeaderAction(label: '재설정', onPressed: onPressSettings!),
-                  ],
-                ],
+              Text(
+                best != null
+                    ? '지금 나가면 ${best.routeName} 탈 수 있어요'
+                    : '지금은 탈 수 있는 차가 없어요',
+                style: AppTypo.heading,
               ),
               const SizedBox(height: AppSpace.xs),
               Text(
@@ -131,9 +117,6 @@ class LiveViewScreen extends StatelessWidget {
 
         for (final arrival in response.arrivals) _ArrivalRow(arrival: arrival),
 
-        // 광고는 도착 목록이 끝난 뒤 — 핵심 정보(탈 수 있는 차)를 절대 밀어내지 않는다
-        const AdBanner(),
-
         Padding(
           padding: const EdgeInsets.only(top: AppSpace.lg),
           child: Text(
@@ -143,31 +126,6 @@ class LiveViewScreen extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _HeaderAction extends StatelessWidget {
-  const _HeaderAction({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.xs),
-          child: Text(
-            label,
-            style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -187,7 +145,10 @@ class _Notice extends StatelessWidget {
         right: AppSpace.xl,
         bottom: AppSpace.md,
       ),
-      child: Text(text, style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted)),
+      child: Text(
+        text,
+        style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
+      ),
     );
   }
 }
@@ -233,7 +194,8 @@ class _FeedbackCard extends StatelessWidget {
                         variant: AppButtonVariant.tonal,
                         medium: true,
                         block: true,
-                        onPressed: () => onSubmitFeedback(BoardingResult.missed),
+                        onPressed: () =>
+                            onSubmitFeedback(BoardingResult.missed),
                       ),
                     ),
                   ],
@@ -336,7 +298,9 @@ class _ArrivalRow extends StatelessWidget {
                       arrival.routeName,
                       style: AppTypo.body.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: hasTime ? context.colors.ink : context.colors.inkFaint,
+                        color: hasTime
+                            ? context.colors.ink
+                            : context.colors.inkFaint,
                       ),
                     ),
                     if (arrival.isExpress ?? false) ...[
@@ -349,7 +313,9 @@ class _ArrivalRow extends StatelessWidget {
                   arrival.remainingStops != null
                       ? '${arrival.stopDisplayName} · ${arrival.remainingStops}정거장 전'
                       : arrival.stopDisplayName,
-                  style: AppTypo.caption.copyWith(color: context.colors.inkSubtle),
+                  style: AppTypo.caption.copyWith(
+                    color: context.colors.inkSubtle,
+                  ),
                 ),
               ],
             ),
@@ -368,7 +334,9 @@ class _ArrivalRow extends StatelessWidget {
               Text(
                 statusLabel(arrival.status),
                 style: AppTypo.caption.copyWith(
-                  color: hasTime ? context.colors.inkMuted : context.colors.inkFaint,
+                  color: hasTime
+                      ? context.colors.inkMuted
+                      : context.colors.inkFaint,
                 ),
               ),
             ],

@@ -60,10 +60,10 @@ object TripNotificationBridge {
     }
 
     private fun statusLine(phase: String, eventStop: String, remaining: Int?): String = when (phase) {
-        "ARRIVING" -> "다음 역에서 내리세요 — $eventStop"
-        "TRANSFER" -> "$eventStop 도착 — 갈아탈 시간이에요"
+        "ARRIVING" -> "다음 역 ${eventStop}에서 내리세요"
+        "TRANSFER" -> "$eventStop 도착, 갈아탈 시간이에요"
         "DONE" -> "목적지에 도착했어요"
-        "LOST" -> "추적할 수 없어요 — 안내방송을 확인하세요"
+        "LOST" -> "추적할 수 없어요. 안내방송을 확인하세요"
         else -> when {
             eventStop.isEmpty() || remaining == null -> "위치 확인 중이에요…"
             else -> "${eventStop}에서 내려요 · ${remaining}정거장"

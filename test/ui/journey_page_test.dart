@@ -35,17 +35,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('여정이 없으면 안내와 만들기 버튼을 보여준다', (tester) async {
+  testWidgets('여정이 없으면 가운데 안내와 만들기 버튼을 보여준다', (tester) async {
+    // 놓치지마 탭 초기 화면과 같은 가운데 타이틀·서브타이틀·버튼 (디자인 통일 2026-09-16)
     await pumpPage(tester);
 
-    expect(find.text('아직 여정이 없어요'), findsOneWidget);
-    expect(find.text('+ 여정 만들기'), findsOneWidget);
+    expect(find.text('놓치지 않는 하차,\n여정 만들기부터 시작해요'), findsOneWidget);
+    expect(find.text('출발지부터 환승·목적지까지 넣어두면\n내릴 타이밍을 알려드려요'), findsOneWidget);
+    expect(find.text('여정 만들기'), findsOneWidget);
   });
 
   testWidgets('여정 만들기를 누르면 생성 화면이 열린다', (tester) async {
     await pumpPage(tester);
 
-    await tester.tap(find.text('+ 여정 만들기'));
+    await tester.tap(find.text('여정 만들기'));
     await tester.pumpAndSettle();
 
     expect(find.byType(JourneyCreatePage), findsOneWidget);

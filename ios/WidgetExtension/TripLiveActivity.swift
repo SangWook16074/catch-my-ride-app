@@ -75,10 +75,10 @@ private let coral = Color(red: 0xF2 / 255.0, green: 0x65 / 255.0, blue: 0x5A / 2
 
 private func statusLine(_ state: TripActivityAttributes.ContentState) -> String {
   switch state.phase {
-  case "ARRIVING": return "다음 역에서 내리세요 — \(state.eventStop)"
-  case "TRANSFER": return "\(state.eventStop) 도착 — 갈아탈 시간이에요"
+  case "ARRIVING": return "다음 역 \(state.eventStop)에서 내리세요"
+  case "TRANSFER": return "\(state.eventStop) 도착, 갈아탈 시간이에요"
   case "DONE": return "목적지에 도착했어요"
-  case "LOST": return "추적할 수 없어요 — 안내방송을 확인하세요"
+  case "LOST": return "추적할 수 없어요. 안내방송을 확인하세요"
   default:
     return state.eventStop.isEmpty ? "위치 확인 중이에요" : "\(state.eventStop)에서 내려요"
   }

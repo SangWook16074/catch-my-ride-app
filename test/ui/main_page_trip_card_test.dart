@@ -30,13 +30,19 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(Brightness.light),
-        home: Scaffold(body: MainPage(active: true, onOpenCatch: () {})),
+        home: Scaffold(
+          body: MainPage(
+            active: true,
+            onOpenCatch: () {},
+            onOpenJourney: () {},
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle(); // 확인 폴링 — 열차 특정 전(위치 확인 중)
 
     expect(find.text('하차 알림 진행 중'), findsOneWidget);
-    expect(find.text('당산행 — 위치 확인 중'), findsOneWidget);
+    expect(find.text('당산행 위치 확인 중'), findsOneWidget);
 
     await tester.tap(find.text('하차 알림 진행 중'));
     await tester.pumpAndSettle(); // 트립 화면 폴링 — 2정거장

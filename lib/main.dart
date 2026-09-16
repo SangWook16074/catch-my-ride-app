@@ -29,8 +29,8 @@ Future<void> main() async {
 }
 
 /// 놓치지마 스토어판 — 시작은 StartupGate: 첫 실행에 경로가 없으면 바로 온보딩,
-/// 이후에는 바텀 네비게이션 셸(메인·놓치지마·새로운 기능·내정보).
-/// 놓치지마 탭의 플로우는 미니앱(catch_my_ride_appintoss)과 동일:
+/// 이후에는 바텀 네비게이션 셸(메인·출발 알림·하차 알림·내정보).
+/// 출발 알림 탭의 플로우는 미니앱(catch_my_ride_appintoss)과 동일:
 /// 라이브 뷰 ↔ 온보딩 7단계 위저드. 메인 탭은 각 섹션 요약(대시보드) 자리.
 class CatchMyRideApp extends StatelessWidget {
   const CatchMyRideApp({super.key});

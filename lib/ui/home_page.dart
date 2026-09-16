@@ -12,7 +12,10 @@ import '../domain/models.dart';
 import '../domain/push_entry.dart';
 import '../platform/deep_links.dart';
 import '../platform/push.dart';
+import 'components/center_message.dart';
+import 'components/fade_route.dart';
 import 'components/route_delete_sheet.dart';
+import 'components/tab_header.dart';
 import 'components/route_rename_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/chip.dart';
@@ -185,8 +188,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// (LOST 화면 "처음부터 다시 추적" 진입점)
   Future<void> _openTripLink(String tripId) async {
     final storedTripId = await _tripStore.read();
-    final journeyId =
-        storedTripId == tripId ? await _tripStore.readJourneyId() : null;
+    final journeyId = storedTripId == tripId
+        ? await _tripStore.readJourneyId()
+        : null;
     if (!mounted) {
       return;
     }
@@ -276,7 +280,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final today = DateTime.now();
     String pad(int n) => n.toString().padLeft(2, '0');
     // 푸시가 알려준 날짜가 있으면 그 날짜로 기록한다 (자정 넘김 등 엣지 대비)
-    final notifiedDate = _pushNotifiedDate ??
+    final notifiedDate =
+        _pushNotifiedDate ??
         '${today.year}-${pad(today.month)}-${pad(today.day)}';
     try {
       await api.postBoardingFeedback(
@@ -430,9 +435,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (create != true || !mounted) {
       return;
     }
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const JourneyCreatePage()),
-    );
+    // 여정 만들기 진입은 페이드 전환 (오너 결정 2026-09-16)
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(fadeRoute(const JourneyCreatePage()));
     if (created == true && mounted) {
       // 방금 만든 여정으로 바로 시작 — 그래도 오늘과 안 맞으면(다른 요일 반복) 그만 묻는다
       await _maybeStartTrip(offerCreate: false);
@@ -523,9 +529,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _openOnboarding(String? routeId) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => OnboardingPage(routeId: routeId),
-      ),
+      MaterialPageRoute<void>(builder: (_) => OnboardingPage(routeId: routeId)),
     );
     // 온보딩·재설정에서 돌아오면 즉시 갱신 (미니앱 focus 리스너와 동일 역할)
     unawaited(_refresh());
@@ -608,141 +612,124 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    // 콘텐츠가 글라스 헤더·네비 뒤로 흐른다 — 상하 여백은 스크롤 padding이 담당
+    final headerBottom =
+        MediaQuery.paddingOf(context).top + TabHeader.contentHeight;
     return Scaffold(
       backgroundColor: context.colors.background,
-      // bottom: false — 루트 셸 글라스 네비 밑으로 콘텐츠가 흐른다 (라이브 뷰 ListView가 하단 패딩 담당)
-      body: SafeArea(bottom: false, child: _body()),
+      extendBodyBehindAppBar: true,
+      appBar: TabHeader(title: '출발 알림', trailing: _headerActions()),
+      body: _body(headerBottom),
     );
   }
 
-  Widget _body() {
-    final response = _response;
-
-    if (_phase == _Phase.needOnboarding) {
-      return _CenterMessage(
-        title: '놓치지 않는 출근길,\n통근 설정부터 시작해요',
-        titleLarge: true,
-        subtitle: '출발지·정류장·도보 시간만 알려주시면\n언제 나가야 하는지 알려드려요',
-        buttonLabel: '설정 시작하기',
-        onPressed: () => unawaited(_openOnboarding(null)),
-      );
+  /// 헤더 오른쪽 삭제·재설정 — 라이브 뷰가 준비된 상태에서만 보인다
+  Widget? _headerActions() {
+    if (_phase != _Phase.ready || _response == null) {
+      return null;
     }
-
-    if (_phase == _Phase.loadFailed && response == null) {
-      return _CenterMessage(
-        title: '도착 정보를 불러오지 못했어요',
-        subtitle: '네트워크를 확인하고 다시 시도해주세요',
-        buttonLabel: '다시 시도',
-        onPressed: () => unawaited(_refresh()),
-      );
-    }
-
-    if (_phase == _Phase.loading || response == null) {
-      return Center(
-        child: Text(
-          '도착 정보를 불러오고 있어요…',
-          style: AppTypo.bodySm.copyWith(color: context.colors.inkSubtle),
-        ),
-      );
-    }
-
-    final selectedRoute = _selectedRoute;
-    return Column(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        if (_routes.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpace.xl,
-              right: AppSpace.xl,
-              top: AppSpace.md,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final route in _routes)
-                    AppChip(
-                      label: route.label,
-                      selected: route.id == _selectedRouteId,
-                      onPressed: () => _selectRoute(route),
-                    ),
-                  if (_routes.length < maxCommuteRoutes)
-                    AppChip(
-                      label: '+ 추가',
-                      selected: false,
-                      onPressed: () => unawaited(_openOnboarding('new')),
-                    ),
-                ],
-              ),
-            ),
+        if (_selectedRoute != null) ...[
+          TabHeaderAction(
+            label: '삭제',
+            onPressed: () => unawaited(_requestDeleteRoute()),
           ),
-        Expanded(
-          child: LiveViewScreen(
-            response: response,
-            stale: _stale,
-            todayFeedback: _todayFeedback,
-            onSubmitFeedback: (result) {
-              // 햅틱: 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
-              HapticFeedback.mediumImpact();
-              unawaited(_handleFeedback(result));
-            },
-            bufferSuggestion: _bufferSuggestion,
-            appliedBufferMinutes: _appliedBufferMinutes,
-            onApplyBufferSuggestion: () => unawaited(_applySuggestion()),
-            onDismissBufferSuggestion: _dismissSuggestion,
-            onPressSettings: () =>
-                unawaited(_openOnboarding(_selectedRouteId)),
-            onPressDeleteRoute: selectedRoute == null
-                ? null
-                : () => unawaited(_requestDeleteRoute()),
-          ),
+          const SizedBox(width: AppSpace.sm),
+        ],
+        TabHeaderAction(
+          label: '재설정',
+          onPressed: () => unawaited(_openOnboarding(_selectedRouteId)),
         ),
       ],
     );
   }
-}
 
-class _CenterMessage extends StatelessWidget {
-  const _CenterMessage({
-    required this.title,
-    required this.subtitle,
-    required this.buttonLabel,
-    required this.onPressed,
-    this.titleLarge = false,
-  });
+  Widget _body(double headerBottom) {
+    final response = _response;
 
-  final String title;
-  final String subtitle;
-  final String buttonLabel;
-  final VoidCallback onPressed;
-  final bool titleLarge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: titleLarge ? AppTypo.title : AppTypo.heading,
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            AppButton(label: buttonLabel, onPressed: onPressed),
-          ],
+    if (_phase == _Phase.needOnboarding) {
+      return Padding(
+        padding: EdgeInsets.only(top: headerBottom),
+        child: CenterMessage(
+          title: '놓치지 않는 출근길,\n통근 설정부터 시작해요',
+          titleLarge: true,
+          subtitle: '출발지·정류장·도보 시간만 알려주시면\n언제 나가야 하는지 알려드려요',
+          buttonLabel: '설정 시작하기',
+          onPressed: () => unawaited(_openOnboarding(null)),
         ),
-      ),
+      );
+    }
+
+    if (_phase == _Phase.loadFailed && response == null) {
+      return Padding(
+        padding: EdgeInsets.only(top: headerBottom),
+        child: CenterMessage(
+          title: '도착 정보를 불러오지 못했어요',
+          subtitle: '네트워크를 확인하고 다시 시도해주세요',
+          buttonLabel: '다시 시도',
+          onPressed: () => unawaited(_refresh()),
+        ),
+      );
+    }
+
+    if (_phase == _Phase.loading || response == null) {
+      return Padding(
+        padding: EdgeInsets.only(top: headerBottom),
+        child: Center(
+          child: Text(
+            '도착 정보를 불러오고 있어요…',
+            style: AppTypo.bodySm.copyWith(color: context.colors.inkSubtle),
+          ),
+        ),
+      );
+    }
+
+    // 경로 칩은 스크롤 안에 둔다 — 콘텐츠가 글라스 헤더 뒤로 지나가며 비치는 게 요점
+    return LiveViewScreen(
+      topPadding: headerBottom + AppSpace.md,
+      leading: _routes.isEmpty
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(
+                left: AppSpace.xl,
+                right: AppSpace.xl,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final route in _routes)
+                      AppChip(
+                        label: route.label,
+                        selected: route.id == _selectedRouteId,
+                        onPressed: () => _selectRoute(route),
+                      ),
+                    if (_routes.length < maxCommuteRoutes)
+                      AppChip(
+                        label: '+ 추가',
+                        selected: false,
+                        onPressed: () => unawaited(_openOnboarding('new')),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+      response: response,
+      stale: _stale,
+      todayFeedback: _todayFeedback,
+      onSubmitFeedback: (result) {
+        // 햅틱: 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
+        HapticFeedback.mediumImpact();
+        unawaited(_handleFeedback(result));
+      },
+      bufferSuggestion: _bufferSuggestion,
+      appliedBufferMinutes: _appliedBufferMinutes,
+      onApplyBufferSuggestion: () => unawaited(_applySuggestion()),
+      onDismissBufferSuggestion: _dismissSuggestion,
     );
   }
 }

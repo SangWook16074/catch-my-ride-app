@@ -7,7 +7,9 @@ import '../data/api.dart';
 import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
-import 'components/ad_banner.dart';
+import 'components/center_message.dart';
+import 'components/fade_route.dart';
+import 'components/tab_header.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/components/sheet.dart';
@@ -146,9 +148,10 @@ class _JourneyPageState extends State<JourneyPage> {
   }
 
   Future<void> _openCreate() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const JourneyCreatePage()),
-    );
+    // 여정 만들기 진입은 페이드 전환 (오너 결정 2026-09-16)
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(fadeRoute(const JourneyCreatePage()));
     if (created == true) {
       unawaited(_load());
     }
@@ -237,9 +240,7 @@ class _JourneyPageState extends State<JourneyPage> {
           ),
           child: Text(
             body,
-            style: AppTypo.bodySm.copyWith(
-              color: sheetContext.colors.inkMuted,
-            ),
+            style: AppTypo.bodySm.copyWith(color: sheetContext.colors.inkMuted),
           ),
         ),
       ),
@@ -248,40 +249,44 @@ class _JourneyPageState extends State<JourneyPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false, // 콘텐츠가 글라스 네비 밑으로 흐른다 — 하단 여백은 ListView padding이 담당
-      child: RefreshIndicator.adaptive(
+    // 콘텐츠가 글라스 헤더·네비 뒤로 흐른다 — 상하 여백은 스크롤 padding이 담당
+    final headerBottom =
+        MediaQuery.paddingOf(context).top + TabHeader.contentHeight;
+    // 여정 없는 초기 화면 — 출발 알림 탭 온보딩 안내와 같은 가운데 타이틀·서브타이틀·버튼
+    // (오너 결정 2026-09-16: 탭 디자인 통일). 진행 중 트립이 있으면 목록 레이아웃 유지
+    if (_phase == _JourneyPhase.ready &&
+        _journeys.isEmpty &&
+        _activeTrip == null) {
+      return Scaffold(
+        backgroundColor: context.colors.background,
+        extendBodyBehindAppBar: true,
+        appBar: const TabHeader(title: '하차 알림'),
+        body: Padding(
+          padding: EdgeInsets.only(top: headerBottom),
+          child: CenterMessage(
+            title: '놓치지 않는 하차,\n여정 만들기부터 시작해요',
+            titleLarge: true,
+            subtitle: '출발지부터 환승·목적지까지 넣어두면\n내릴 타이밍을 알려드려요',
+            buttonLabel: '여정 만들기',
+            onPressed: () => unawaited(_openCreate()),
+          ),
+        ),
+      );
+    }
+    return Scaffold(
+      backgroundColor: context.colors.background,
+      extendBodyBehindAppBar: true,
+      appBar: const TabHeader(title: '하차 알림'),
+      body: RefreshIndicator.adaptive(
+        edgeOffset: headerBottom,
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(
-            top: AppSpace.md,
+            top: headerBottom + AppSpace.md,
             bottom: MediaQuery.paddingOf(context).bottom + AppSpace.lg,
           ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.xl,
-                AppSpace.lg,
-                AppSpace.xl,
-                AppSpace.xs,
-              ),
-              child: const Text('하차 알림', style: AppTypo.title),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.xl,
-                0,
-                AppSpace.xl,
-                AppSpace.lg,
-              ),
-              child: Text(
-                '탑승하면 시작을 눌러주세요 — 내릴 역을 알려드려요',
-                style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
-              ),
-            ),
-            ..._body(),
-          ],
+          children: _body(),
         ),
       ),
     );
@@ -308,7 +313,7 @@ class _JourneyPageState extends State<JourneyPage> {
                 const Text('하차 알림을 준비하고 있어요', style: AppTypo.heading),
                 const SizedBox(height: AppSpace.xs),
                 Text(
-                  '서버 업데이트 후 이용할 수 있어요 — 조금만 기다려주세요',
+                  '서버 업데이트 후 이용할 수 있어요. 조금만 기다려주세요',
                   style: AppTypo.caption.copyWith(
                     color: context.colors.inkMuted,
                   ),
@@ -363,25 +368,8 @@ class _JourneyPageState extends State<JourneyPage> {
                 ],
               ),
             ),
-          if (_journeys.isEmpty)
-            AppCard(
-              tone: AppCardTone.brand,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('아직 여정이 없어요', style: AppTypo.heading),
-                  const SizedBox(height: AppSpace.xs),
-                  Text(
-                    '출발지부터 목적지까지, 환승 구간까지 넣어두면\n내릴 타이밍을 알려드려요',
-                    style: AppTypo.caption.copyWith(
-                      color: context.colors.inkMuted,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            for (final journey in _journeys) _journeyCard(journey),
+          // 여정 없음 + 진행 중 트립 없음은 build의 가운데 안내가 담당한다
+          for (final journey in _journeys) _journeyCard(journey),
           if (_journeys.length < maxJourneys)
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -399,19 +387,18 @@ class _JourneyPageState extends State<JourneyPage> {
                 onPressed: () => unawaited(_openCreate()),
               ),
             ),
-          // 광고는 여정 목록·만들기 버튼 아래 — 시작 동선을 가로막지 않는다
-          const AdBanner(),
         ];
     }
   }
 
   String _activeTripSummary(TripStatus status) => switch (status.phase) {
-    TripPhase.transfer => '${status.eventStop} 환승 대기 중 — 탑승하면 눌러주세요',
-    TripPhase.lost => '추적이 끊겼어요 — 상태를 확인해주세요',
-    TripPhase.done => '목적지 도착 — 트립을 마무리해주세요',
-    _ => status.remainingStops == null
-        ? '${status.eventStop}행 — 위치 확인 중'
-        : '${status.eventStop}까지 ${status.remainingStops}정거장',
+    TripPhase.transfer => '${status.eventStop} 환승 대기 중이에요. 탑승하면 눌러주세요',
+    TripPhase.lost => '추적이 끊겼어요. 상태를 확인해주세요',
+    TripPhase.done => '목적지에 도착했어요. 트립을 마무리해주세요',
+    _ =>
+      status.remainingStops == null
+          ? '${status.eventStop}행 위치 확인 중'
+          : '${status.eventStop}까지 ${status.remainingStops}정거장',
   };
 
   Widget _journeyCard(Journey journey) {

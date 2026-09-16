@@ -30,20 +30,23 @@ void main() {
     await pumpShell(tester);
 
     expect(find.byType(GlassNavBar), findsOneWidget);
-    for (final label in ['메인', '놓치지마', '하차 알림', '내정보']) {
+    for (final label in ['메인', '출발 알림', '하차 알림', '내정보']) {
       expect(navLabel(label), findsOneWidget);
     }
   });
 
-  testWidgets('첫 탭 메인에 놓치지마 요약 섹션이 있다', (tester) async {
+  testWidgets('첫 탭 메인에 출발 알림·하차 알림 두 섹션의 진입점이 있다', (tester) async {
     await pumpShell(tester);
 
-    // 경로가 없는 상태 — 요약 카드는 설정 유도를 보여준다
-    expect(find.text('전체 보기'), findsOneWidget);
+    // 섹션마다 전체 보기 하나씩
+    expect(find.text('전체 보기'), findsNWidgets(2));
+    // 경로가 없는 상태 — 출발 알림 요약 카드는 설정 유도를 보여준다
     expect(find.text('아직 통근 설정이 없어요'), findsOneWidget);
+    // 여정이 없는 상태 — 하차 알림 카드는 여정 만들기 유도를 보여준다
+    expect(find.text('아직 여정이 없어요'), findsOneWidget);
   });
 
-  testWidgets('요약 카드의 설정 시작하기를 누르면 놓치지마 탭으로 전환된다', (tester) async {
+  testWidgets('요약 카드의 설정 시작하기를 누르면 출발 알림 탭으로 전환된다', (tester) async {
     await pumpShell(tester);
 
     await tester.tap(find.text('설정 시작하기'));
@@ -52,13 +55,22 @@ void main() {
     expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
   });
 
-  testWidgets('전체 보기를 누르면 놓치지마 탭으로 전환된다', (tester) async {
+  testWidgets('출발 알림 전체 보기를 누르면 출발 알림 탭으로 전환된다', (tester) async {
     await pumpShell(tester);
 
-    await tester.tap(find.text('전체 보기'));
+    await tester.tap(find.text('전체 보기').first);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
+  });
+
+  testWidgets('하차 알림 전체 보기를 누르면 하차 알림 탭으로 전환된다', (tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(find.text('전체 보기').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('여정 만들기부터 시작해요'), findsOneWidget);
   });
 
   testWidgets('탭을 누르면 해당 화면으로 이동한다', (tester) async {
@@ -70,10 +82,10 @@ void main() {
 
     await tester.tap(navLabel('하차 알림'));
     await tester.pumpAndSettle();
-    expect(find.text('아직 여정이 없어요'), findsOneWidget);
+    expect(find.textContaining('여정 만들기부터 시작해요'), findsOneWidget);
 
-    // 놓치지마 = 라이브 뷰 본편 (경로 없음 = 온보딩 안내)
-    await tester.tap(navLabel('놓치지마'));
+    // 출발 알림 = 라이브 뷰 본편 (경로 없음 = 온보딩 안내)
+    await tester.tap(navLabel('출발 알림'));
     await tester.pumpAndSettle();
     expect(find.textContaining('통근 설정부터 시작해요'), findsOneWidget);
   });

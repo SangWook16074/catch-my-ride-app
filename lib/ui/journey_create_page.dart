@@ -78,7 +78,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
       lines = await api.getStopRoutes(StopType.subway, board.stopId);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = '노선을 불러오지 못했어요 — 다시 시도해주세요');
+        setState(() => _error = '노선을 불러오지 못했어요. 다시 시도해주세요');
       }
       return null;
     }
@@ -87,7 +87,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
     }
     return showAppSheet<RouteOption>(
       context: context,
-      header: '${board.displayName} — 타는 노선',
+      header: '${board.displayName}에서 타는 노선',
       builder: (sheetContext) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -150,7 +150,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
       }
       setState(() {
         _saving = false;
-        _error = '저장하지 못했어요 — 네트워크를 확인해주세요';
+        _error = '저장하지 못했어요. 네트워크를 확인해주세요';
       });
     }
   }
@@ -173,7 +173,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
                 maxLength: journeyLabelMaxLength,
               ),
             ),
-            _sectionHeader('구간 — 환승하면 구간을 이어 붙여주세요'),
+            _sectionHeader('구간 (환승하면 이어 붙여주세요)'),
             for (final (index, leg) in _legs.indexed)
               AppCard(
                 margin: const EdgeInsets.only(
@@ -383,7 +383,7 @@ class _StationSearchSheetState extends State<_StationSearchSheet> {
             Padding(
               padding: const EdgeInsets.all(AppSpace.lg),
               child: Text(
-                '검색 결과가 없어요 — 지하철역만 지원해요',
+                '검색 결과가 없어요. 지하철역만 지원해요',
                 style: AppTypo.bodySm.copyWith(
                   color: context.colors.inkSubtle,
                 ),

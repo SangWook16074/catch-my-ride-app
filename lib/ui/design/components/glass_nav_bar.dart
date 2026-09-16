@@ -8,6 +8,8 @@
 ///
 /// 상호작용: 탭 = 즉시 선택, 가로 스와이프 = 선택 필이 손가락을 따라오고 놓으면
 /// 가까운 탭에 스냅 (오너 요구 2026-09-15). 경계를 넘을 때 selection 햅틱.
+/// 손가락이 닿아 있는 동안 바 전체가 아주 살짝 확대된다 — 유리가 손끝에 반응하는
+/// 인상 (오너 요구 2026-09-16).
 library;
 
 import 'dart:ui';
@@ -49,15 +51,24 @@ class _GlassNavBarState extends State<GlassNavBar> {
   /// 유리 뒤 콘텐츠가 뭉개질 만큼만 — 과하면 성능·가독성 둘 다 잃는다
   static const double _blurSigma = 20;
 
+  /// 눌림 확대 배율 — "아주 살짝"이 요점: 이보다 크면 장난감 같아진다
+  static const double _pressedScale = 1.03;
+
   /// 드래그 중 선택 필의 연속 위치(칸 단위) — null이면 selectedIndex에 정착 상태
   double? _dragPosition;
+
+  /// 손가락이 바에 닿아 있는 동안 true — 바 전체 확대의 근거
+  bool _pressed = false;
 
   int get _activeIndex => _dragPosition?.round() ?? widget.selectedIndex;
 
   void _dragTo(double localX, double slotWidth) {
-    final next = (localX / slotWidth - 0.5)
-        .clamp(0.0, (widget.items.length - 1).toDouble());
-    final crossed = _dragPosition != null && _dragPosition!.round() != next.round();
+    final next = (localX / slotWidth - 0.5).clamp(
+      0.0,
+      (widget.items.length - 1).toDouble(),
+    );
+    final crossed =
+        _dragPosition != null && _dragPosition!.round() != next.round();
     setState(() => _dragPosition = next);
     if (crossed) {
       HapticFeedback.selectionClick(); // 경계 통과 — 칸이 넘어갔음을 손끝으로
@@ -88,84 +99,100 @@ class _GlassNavBarState extends State<GlassNavBar> {
         AppSpace.lg,
         bottomInset > 0 ? bottomInset : AppSpace.lg,
       ),
-      child: DecoratedBox(
-        // 그림자는 클립 바깥에 — ClipRRect 안에서는 잘려 보이지 않는다
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          boxShadow: [
-            BoxShadow(
-              color: colors.ink.withValues(alpha: 0.10),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: _blurSigma, sigmaY: _blurSigma),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.glass,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(color: colors.glassStroke),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpace.sm,
-                  vertical: AppSpace.sm,
+      // Listener: 탭·스와이프 제스처와 경합하지 않고 "닿음" 자체만 감지한다
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? _pressedScale : 1.0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          child: DecoratedBox(
+            // 그림자는 클립 바깥에 — ClipRRect 안에서는 잘려 보이지 않는다
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.ink.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final slotWidth =
-                        constraints.maxWidth / widget.items.length;
-                    final position =
-                        _dragPosition ?? widget.selectedIndex.toDouble();
-                    final dragging = _dragPosition != null;
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onHorizontalDragStart: (details) =>
-                          _dragTo(details.localPosition.dx, slotWidth),
-                      onHorizontalDragUpdate: (details) =>
-                          _dragTo(details.localPosition.dx, slotWidth),
-                      onHorizontalDragEnd: (_) => _endDrag(),
-                      onHorizontalDragCancel: _endDrag,
-                      child: Stack(
-                        children: [
-                          // 선택 필 — 드래그 중엔 손가락을 따라오고, 놓으면 스냅 애니메이션
-                          AnimatedPositioned(
-                            duration: dragging
-                                ? Duration.zero
-                                : const Duration(milliseconds: 250),
-                            curve: Curves.easeOutCubic,
-                            left: position * slotWidth,
-                            top: 0,
-                            bottom: 0,
-                            width: slotWidth,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: colors.primarySoft,
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.pill),
-                              ),
-                            ),
-                          ),
-                          Row(
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: _blurSigma,
+                  sigmaY: _blurSigma,
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.glass,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border: Border.all(color: colors.glassStroke),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.sm,
+                      vertical: AppSpace.sm,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final slotWidth =
+                            constraints.maxWidth / widget.items.length;
+                        final position =
+                            _dragPosition ?? widget.selectedIndex.toDouble();
+                        final dragging = _dragPosition != null;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onHorizontalDragStart: (details) =>
+                              _dragTo(details.localPosition.dx, slotWidth),
+                          onHorizontalDragUpdate: (details) =>
+                              _dragTo(details.localPosition.dx, slotWidth),
+                          onHorizontalDragEnd: (_) => _endDrag(),
+                          onHorizontalDragCancel: _endDrag,
+                          child: Stack(
                             children: [
-                              for (final (index, item) in widget.items.indexed)
-                                Expanded(
-                                  child: _GlassNavButton(
-                                    item: item,
-                                    selected: index == _activeIndex,
-                                    onTap: () => widget.onSelect(index),
+                              // 선택 필 — 드래그 중엔 손가락을 따라오고, 놓으면 스냅 애니메이션
+                              AnimatedPositioned(
+                                duration: dragging
+                                    ? Duration.zero
+                                    : const Duration(milliseconds: 250),
+                                curve: Curves.easeOutCubic,
+                                left: position * slotWidth,
+                                top: 0,
+                                bottom: 0,
+                                width: slotWidth,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: colors.primarySoft,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.pill,
+                                    ),
                                   ),
                                 ),
+                              ),
+                              Row(
+                                children: [
+                                  for (final (index, item)
+                                      in widget.items.indexed)
+                                    Expanded(
+                                      child: _GlassNavButton(
+                                        item: item,
+                                        selected: index == _activeIndex,
+                                        onTap: () => widget.onSelect(index),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
-                        ],
-                      ),
-                    );
-                  },
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
