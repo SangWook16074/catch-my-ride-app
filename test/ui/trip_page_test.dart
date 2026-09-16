@@ -61,7 +61,7 @@ void main() {
     );
 
     expect(find.text('위치 확인 중이에요…'), findsOneWidget);
-    expect(find.text('탑승한 열차를 찾고 있어요 — 곧 남은 정거장을 알려드려요'), findsOneWidget);
+    expect(find.text('탑승한 열차를 찾고 있어요. 곧 남은 정거장을 알려드려요'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
   });

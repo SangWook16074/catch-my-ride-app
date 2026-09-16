@@ -9,6 +9,7 @@ import '../domain/journey.dart';
 import '../platform/live_activity.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
+import 'components/ad_banner.dart';
 import 'design/components/button.dart';
 import 'design/components/sheet.dart';
 import 'design/tokens.dart';
@@ -240,6 +241,9 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(widget.journeyLabel, style: AppTypo.heading),
       ),
+      // 트립 진행 중에도 배너 노출 (오너 결정 2026-09-16 2차: 트립 화면 금지 폐기 —
+      // 화면을 오래 보는 구간이라 내정보 대신 여기에 둔다). 종료 버튼 아래 하단 고정
+      bottomNavigationBar: const SafeArea(top: false, child: AdBanner()),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.xl),
@@ -342,7 +346,7 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
               Text(
                 locatedStop != null
                     ? '하차역에 가까워지면 남은 정거장을 알려드려요'
-                    : '탑승한 열차를 찾고 있어요 — 곧 남은 정거장을 알려드려요',
+                    : '탑승한 열차를 찾고 있어요. 곧 남은 정거장을 알려드려요',
                 textAlign: TextAlign.center,
                 style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
               ),
@@ -353,7 +357,7 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
         );
       case TripPhase.transfer:
         return _message(
-          title: '${status.eventStop} 도착 — 갈아탈 시간이에요',
+          title: '${status.eventStop} 도착, 갈아탈 시간이에요',
           subtitle: '다음 구간 차량에 탑승하면 아래를 눌러주세요',
           button: AppButton(
             label: '다음 구간 탔어요',
@@ -364,7 +368,7 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
       case TripPhase.done:
         return _message(
           title: '목적지에 도착했어요',
-          subtitle: '오늘도 놓치지 않았어요 — 수고했어요!',
+          subtitle: '오늘도 놓치지 않았어요. 수고했어요!',
           button: AppButton(label: '완료', block: true, onPressed: () => unawaited(_end())),
         );
       case TripPhase.lost:
@@ -407,7 +411,7 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
   Widget _footer(TripStatus status) {
     return Text(
       _stale
-          ? '갱신 지연 — 마지막 정보를 표시하고 있어요'
+          ? '갱신이 늦어져 마지막 정보를 보여드리고 있어요'
           : '${formatFetchedAt(status.fetchedAt)} 기준'
                 '${status.realtimeAvailable ? '' : ' · 실시간 정보 없음'}',
       style: AppTypo.caption.copyWith(

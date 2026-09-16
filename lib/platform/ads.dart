@@ -12,8 +12,16 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 class Ads {
+  /// `--dart-define=DISABLE_ADS=true` — 광고 SDK를 아예 켜지 않는 개발·데모 플래그.
+  /// AdMob의 WebView 초기화가 SIGSEGV로 죽는 에뮬레이터 이미지에서 릴리즈 실행용
+  /// (2026-09-16 실측: android-VanillaIceCream + GMS 25.22 조합). 기본값 false — 실빌드 무관
+  static const bool disabled = bool.fromEnvironment('DISABLE_ADS');
+
   /// 앱 시작 시 1회 — 실패해도 본편은 동작해야 하므로 삼킨다 (광고만 안 나오는 강등)
   static Future<void> init() async {
+    if (disabled) {
+      return;
+    }
     try {
       await MobileAds.instance.initialize();
     } catch (error) {
