@@ -37,6 +37,21 @@ class PushBridge {
     }
   }
 
+  /// iOS 포그라운드 표시 — 기본값은 앱이 떠 있으면 FCM 배너를 조용히 삼킨다.
+  /// 트립 화면을 보는 중에도 하차·환승 푸시(§9-4)가 배너·소리로 보여야 하므로 켠다
+  /// (2026-09-19 실주행: 환승 푸시가 "안 온 것처럼" 보인 원인).
+  /// Android는 이 옵션의 영향이 없다(포그라운드 표면은 트립 지속 알림 담당) — 호출 무해
+  Future<void> enableForegroundBanners() async {
+    try {
+      await _messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        sound: true,
+      );
+    } catch (error) {
+      developer.log('push foreground presentation error: $error', name: 'push');
+    }
+  }
+
   /// 현재 권한 상태 확인 — 다이얼로그를 띄우지 않는다 (앱 시작 시 동기화용)
   Future<bool> isAuthorized() async {
     try {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'components/ad_banner.dart';
 import 'design/components/glass_nav_bar.dart';
 import 'design/tokens.dart';
 import 'home_page.dart';
@@ -51,41 +50,31 @@ class _RootShellState extends State<RootShell> {
       // 스크롤 하단 패딩(MediaQuery.padding.bottom)으로 마지막 항목을 피한다
       extendBody: true,
       body: IndexedStack(index: _index, children: pages),
-      // 광고는 셸이 한 장만 소유 — 네 탭 모두 같은 하단 위치(글라스 네비 바로 위)에
-      // 고정된다 (오너 결정 2026-09-16: 탭마다 스크롤 끝 배치는 위치가 제각각이라 폐기).
-      // extendBody라 배너 높이만큼 MediaQuery.padding.bottom이 늘어나 각 탭의
-      // 스크롤 하단 패딩이 자동으로 배너를 피한다.
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 내정보 탭은 광고 없음 (오너 결정 2026-09-16 2차) — Offstage로 숨겨
-          // 탭을 오갈 때 광고를 다시 로드하지 않는다
-          Offstage(offstage: _index == 3, child: const AdBanner()),
-          GlassNavBar(
-            selectedIndex: _index,
-            onSelect: _select,
-            items: const [
-              GlassNavItem(
-                icon: Icons.home_outlined,
-                selectedIcon: Icons.home,
-                label: '메인',
-              ),
-              GlassNavItem(
-                icon: Icons.directions_bus_outlined,
-                selectedIcon: Icons.directions_bus,
-                label: '출발 알림',
-              ),
-              GlassNavItem(
-                icon: Icons.subway_outlined,
-                selectedIcon: Icons.subway,
-                label: '하차 알림',
-              ),
-              GlassNavItem(
-                icon: Icons.person_outlined,
-                selectedIcon: Icons.person,
-                label: '내정보',
-              ),
-            ],
+      // 광고는 셸이 아니라 각 탭의 스크롤 끝에 깔린다 (오너 결정 2026-09-19:
+      // 셸 하단 플로팅은 스크롤을 따라다녀 폐기 — 14ef170 스크롤 끝 배치로 복귀)
+      bottomNavigationBar: GlassNavBar(
+        selectedIndex: _index,
+        onSelect: _select,
+        items: const [
+          GlassNavItem(
+            icon: Icons.home_outlined,
+            selectedIcon: Icons.home,
+            label: '메인',
+          ),
+          GlassNavItem(
+            icon: Icons.directions_bus_outlined,
+            selectedIcon: Icons.directions_bus,
+            label: '출발 알림',
+          ),
+          GlassNavItem(
+            icon: Icons.subway_outlined,
+            selectedIcon: Icons.subway,
+            label: '하차 알림',
+          ),
+          GlassNavItem(
+            icon: Icons.person_outlined,
+            selectedIcon: Icons.person,
+            label: '내정보',
           ),
         ],
       ),

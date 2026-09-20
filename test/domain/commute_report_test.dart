@@ -81,14 +81,43 @@ void main() {
     });
   });
 
-  group('formatReportDate', () {
-    test('한국식 월·일·요일', () {
-      expect(formatReportDate('2026-09-16'), '9월 16일 (수)');
-      expect(formatReportDate('2026-09-13'), '9월 13일 (일)');
+  group('buildCommuteGrass', () {
+    test('주×7 그리드 — 마지막 열이 이번 주, 오늘 이후 칸은 null', () {
+      final grid = buildCommuteGrass(const [], today, weeks: 4);
+      expect(grid.length, 4);
+      expect(grid.every((week) => week.length == 7), isTrue);
+      // 이번 주(09-14 월~): 수요일까지 칸, 목~일은 아직 오지 않은 날
+      final thisWeek = grid.last;
+      expect(thisWeek[0]!.date, DateTime(2026, 9, 14));
+      expect(thisWeek[2]!.date, DateTime(2026, 9, 16));
+      expect(thisWeek[3], isNull);
+      expect(thisWeek[6], isNull);
+      // 지난 주들은 전부 채워지고, 첫 열이 가장 오래된 주다
+      expect(grid[2].every((day) => day != null), isTrue);
+      expect(grid[2][0]!.date, DateTime(2026, 9, 7));
+      expect(grid.first[0]!.date, DateTime(2026, 8, 24));
     });
 
-    test('파싱 불가면 원본 유지', () {
-      expect(formatReportDate('???'), '???');
+    test('기록이 해당 날짜 칸에 매핑된다 — 기록 없는 날은 status null', () {
+      final grid = buildCommuteGrass([
+        boarded('2026-09-16'),
+        missed('2026-09-14'),
+        boarded('2026-09-11'), // 지난주 금
+      ], today, weeks: 2);
+      final thisWeek = grid.last;
+      expect(thisWeek[0]!.status, GrassStatus.missed);
+      expect(thisWeek[1]!.status, isNull);
+      expect(thisWeek[2]!.status, GrassStatus.boarded);
+      expect(grid.first[4]!.status, GrassStatus.boarded);
+    });
+
+    test('형식 오류·미래 날짜 기록은 무시한다', () {
+      final grid = buildCommuteGrass([
+        FeedbackEntry(date: 'not-a-date', result: BoardingResult.boarded),
+        boarded('2026-09-17'), // 미래
+      ], today, weeks: 1);
+      expect(grid.last.every((day) => day == null || day.status == null),
+          isTrue);
     });
   });
 }

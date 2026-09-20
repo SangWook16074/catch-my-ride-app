@@ -51,6 +51,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
   # 앱 아이콘 생성 — assets/icon/app_icon.png(미니앱 로고의 프라이머리 컬러판)에서
   # iOS·Android 전 사이즈를 만든다: dart run flutter_launcher_icons
   flutter_launcher_icons: ^0.14.4

@@ -5,9 +5,12 @@ import 'package:flutter/services.dart';
 
 import '../data/api.dart';
 import '../data/trip_store.dart';
+import '../domain/commute_report.dart';
 import '../domain/journey.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
+import 'components/ad_banner.dart';
+import 'components/commute_grass.dart';
 import 'components/fade_route.dart';
 import 'components/tab_header.dart';
 import 'design/components/button.dart';
@@ -23,6 +26,8 @@ import 'trip_page.dart';
 /// 섹션마다 요약 카드 하나 — 출발 알림은 다음 도착 요약, 하차 알림은 진행 중
 /// 트립이 있으면 트립 요약, 없으면 오늘 여정 원탭 시작. 카드는 통째로 탭 가능해서
 /// 어디를 눌러도 해당 기능 탭으로 넘어간다 (오너 요구: 메인 → 기능 전환이 아주 쉬워야 한다).
+/// 통근 기록(잔디)은 진입점이 아니라 콘텐츠 — 뎁스 없이 섹션 전체를 그대로 노출한다
+/// (오너 결정 2026-09-19: 내정보 리포트 화면을 없애고 메인으로 이동).
 /// 폴링은 각 기능 탭의 몫 — 여기는 탭이 활성화될 때·당겨서 새로고침만 한다.
 class MainPage extends StatefulWidget {
   const MainPage({
@@ -47,8 +52,8 @@ class MainPage extends StatefulWidget {
 
 enum _SummaryPhase { loading, empty, ready, failed }
 
-/// 하차 알림 섹션의 여정 목록 상태 — 하차 알림 탭과 같은 4상 (§9 미배포 = unavailable)
-enum _JourneyPhase { loading, unavailable, failed, ready }
+/// §3-2·§9 기반 섹션(여정·통근 기록)의 로드 상태 — 미배포 서버(404)는 "준비 중"으로 강등
+enum _SectionPhase { loading, unavailable, failed, ready }
 
 class _MainPageState extends State<MainPage> {
   final TripStore _tripStore = TripStore();
@@ -57,8 +62,12 @@ class _MainPageState extends State<MainPage> {
   ArrivalsResponse? _response;
   bool _stale = false;
 
-  _JourneyPhase _journeyPhase = _JourneyPhase.loading;
+  _SectionPhase _journeyPhase = _SectionPhase.loading;
   List<Journey> _journeys = [];
+
+  /// 통근 기록(잔디) 섹션 — 내정보에서 메인으로 이동, 뎁스 없이 전체 노출 (오너 결정 2026-09-19)
+  _SectionPhase _reportPhase = _SectionPhase.loading;
+  List<FeedbackEntry> _feedback = [];
 
   /// 진행 중 트립(하차 알림) 요약 — 로컬 보관 tripId를 서버 상태로 확인
   String? _tripId;
@@ -82,6 +91,7 @@ class _MainPageState extends State<MainPage> {
   Future<void> _load() async {
     unawaited(_checkTrip());
     unawaited(_loadJourneys());
+    unawaited(_loadFeedback());
     try {
       final routes = await api.listCommuteRoutes();
       if (!mounted) {
@@ -138,7 +148,7 @@ class _MainPageState extends State<MainPage> {
       }
       setState(() {
         _journeys = journeys;
-        _journeyPhase = _JourneyPhase.ready;
+        _journeyPhase = _SectionPhase.ready;
       });
     } on ApiException catch (error) {
       if (!mounted) {
@@ -147,14 +157,42 @@ class _MainPageState extends State<MainPage> {
       // §9 미배포 서버는 404(NOT_FOUND) — 하차 알림 탭과 같은 "준비 중" 강등
       setState(
         () => _journeyPhase = error.status == 404
-            ? _JourneyPhase.unavailable
-            : _JourneyPhase.failed,
+            ? _SectionPhase.unavailable
+            : _SectionPhase.failed,
       );
     } catch (_) {
       if (!mounted) {
         return;
       }
-      setState(() => _journeyPhase = _JourneyPhase.failed);
+      setState(() => _journeyPhase = _SectionPhase.failed);
+    }
+  }
+
+  Future<void> _loadFeedback() async {
+    try {
+      final feedback = await api.getFeedbackHistory();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _feedback = feedback;
+        _reportPhase = _SectionPhase.ready;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      // §3-2 미배포 서버는 404 — "준비 중"으로 강등 (여정 섹션과 같은 태도)
+      setState(
+        () => _reportPhase = error.status == 404
+            ? _SectionPhase.unavailable
+            : _SectionPhase.failed,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _reportPhase = _SectionPhase.failed);
     }
   }
 
@@ -341,14 +379,21 @@ class _MainPageState extends State<MainPage> {
               )
             else
               _journeyEntryCard(),
+            // 광고는 스크롤 콘텐츠 사이(하차 알림·통근 기록 섹션 사이)에 깔린다 —
+            // 화면에 고정해 따라다니지 않는다 (오너 결정 2026-09-19)
+            const AdBanner(),
+            _sectionHeader('통근 기록'),
+            _grassCard(),
           ],
         ),
       ),
     );
   }
 
-  /// 섹션 헤더 — 내정보 탭과 같은 캡션 스타일, 오른쪽은 해당 탭 전체 보기
-  Widget _sectionHeader(String title, VoidCallback onOpen) {
+  /// 섹션 헤더 — 헤더 영역 타이틀(AppTypo.title)과 같은 폰트로 시선을 잡는다
+  /// (오너 피드백 2026-09-19: 캡션은 눈에 안 들어온다). [onOpen]이 있으면 오른쪽에
+  /// 해당 탭 전체 보기, 없으면 제목만 (통근 기록처럼 뎁스 없이 전체를 노출하는 섹션)
+  Widget _sectionHeader(String title, [VoidCallback? onOpen]) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.xl,
@@ -358,31 +403,27 @@ class _MainPageState extends State<MainPage> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              title,
-              style: AppTypo.caption.copyWith(color: context.colors.inkSubtle),
-            ),
-          ),
-          GestureDetector(
-            onTap: onOpen,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                Text(
-                  '전체 보기',
-                  style: AppTypo.caption.copyWith(
+          Expanded(child: Text(title, style: AppTypo.title)),
+          if (onOpen != null)
+            GestureDetector(
+              onTap: onOpen,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  Text(
+                    '전체 보기',
+                    style: AppTypo.caption.copyWith(
+                      color: context.colors.inkMuted,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 14,
                     color: context.colors.inkMuted,
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  size: 14,
-                  color: context.colors.inkMuted,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -522,14 +563,14 @@ class _MainPageState extends State<MainPage> {
   /// 하차 알림 섹션 카드 — 진행 중 트립이 없을 때의 진입점
   Widget _journeyEntryCard() {
     switch (_journeyPhase) {
-      case _JourneyPhase.loading:
+      case _SectionPhase.loading:
         return AppCard(
           child: Text(
             '여정을 불러오고 있어요…',
             style: AppTypo.bodySm.copyWith(color: context.colors.inkSubtle),
           ),
         );
-      case _JourneyPhase.unavailable:
+      case _SectionPhase.unavailable:
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,7 +584,7 @@ class _MainPageState extends State<MainPage> {
             ],
           ),
         );
-      case _JourneyPhase.failed:
+      case _SectionPhase.failed:
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,7 +605,7 @@ class _MainPageState extends State<MainPage> {
             ],
           ),
         );
-      case _JourneyPhase.ready:
+      case _SectionPhase.ready:
         if (_journeys.isEmpty) {
           return AppCard(
             tone: AppCardTone.brand,
@@ -624,7 +665,7 @@ class _MainPageState extends State<MainPage> {
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              '탑승하면 시작을 눌러주세요 — 내릴 역을 알려드려요',
+              '탑승하면 시작을 눌러주세요. 내릴 역을 알려드려요',
               style: AppTypo.caption.copyWith(color: context.colors.inkMuted),
             ),
             const SizedBox(height: AppSpace.md),
@@ -638,6 +679,93 @@ class _MainPageState extends State<MainPage> {
         ),
       ),
     );
+  }
+
+  /// 통근 기록 섹션 — 잔디 그리드를 뎁스 없이 통째로 노출한다 (별도 리포트 화면 없음).
+  /// 성공 중심 톤(§9): 요약도 탑승·연속 성공만 말하고 놓침을 세어 보여주지 않는다
+  Widget _grassCard() {
+    switch (_reportPhase) {
+      case _SectionPhase.loading:
+        return AppCard(
+          child: Text(
+            '기록을 불러오고 있어요…',
+            style: AppTypo.bodySm.copyWith(color: context.colors.inkSubtle),
+          ),
+        );
+      case _SectionPhase.unavailable:
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('통근 기록을 준비하고 있어요', style: AppTypo.heading),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                '서버 업데이트 후 이용할 수 있어요. 조금만 기다려주세요',
+                style: AppTypo.caption.copyWith(color: context.colors.inkMuted),
+              ),
+            ],
+          ),
+        );
+      case _SectionPhase.failed:
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('기록을 불러오지 못했어요', style: AppTypo.heading),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                '네트워크를 확인하고 다시 시도해주세요',
+                style: AppTypo.caption.copyWith(color: context.colors.inkMuted),
+              ),
+              const SizedBox(height: AppSpace.md),
+              AppButton(
+                label: '다시 시도',
+                variant: AppButtonVariant.tonal,
+                medium: true,
+                onPressed: () => unawaited(_loadFeedback()),
+              ),
+            ],
+          ),
+        );
+      case _SectionPhase.ready:
+        if (_feedback.isEmpty) {
+          return AppCard(
+            tone: AppCardTone.brand,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('아직 통근 기록이 없어요', style: AppTypo.heading),
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  '아침에 "탔어요/놓쳤어요"를 누르면\n여기에 잔디처럼 기록이 쌓여요',
+                  style: AppTypo.caption.copyWith(
+                    color: context.colors.inkMuted,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        final now = DateTime.now();
+        final report = buildCommuteReport(_feedback, now);
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '이번 주 ${report.weekBoarded}/${report.weekTotal}회 탑승 · '
+                '연속 ${report.currentStreak}회 성공',
+                style: AppTypo.bodySm.copyWith(
+                  color: context.colors.inkMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpace.md),
+              CommuteGrass(entries: _feedback, today: now),
+            ],
+          ),
+        );
+    }
   }
 
   /// 경로·여정 라벨 알약 — 두 섹션 카드가 같은 시각 언어를 쓴다

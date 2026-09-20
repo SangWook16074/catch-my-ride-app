@@ -79,10 +79,10 @@ lib/
 | geolocator 플러그인 (`lib/platform/location.dart`) | Flutter → OS | 온보딩 집 위치 1회 등록 (FR-101). 상시 추적 금지(NFR-05) |
 | shared_preferences 플러그인 (`lib/data/suggestion_store.dart`, `lib/data/auth.dart`) | Flutter → OS | 버퍼 추천 처리 시각·익명 키(§8-3) 등 경량 로컬 저장 |
 | app_links 플러그인 (`lib/platform/deep_links.dart`) | OS → Flutter | 딥링크 수신 — `catchmyride://open?from=push&notifiedDate=…` (스킴: iOS Info.plist / Android manifest) |
-| firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |
+| firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link)·iOS 포그라운드 배너 표시(트립 중 하차·환승 푸시 §9-4). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |
 | package_info_plus 플러그인 (`lib/platform/app_info.dart`) | Flutter → OS | 앱 버전·빌드 번호 표시 (내정보 탭) |
 | `catchmyride/live_activity` MethodChannel (`lib/platform/live_activity.dart` ↔ iOS `LiveActivityBridge.swift` / Android `TripNotificationBridge.kt`) | Flutter → OS | 하차 알림 트립 잠금화면 표면 시작·갱신·종료 (FR-705) — iOS 16.1+ Live Activity, Android 지속(ongoing) 무음 알림(탭 = 트립 딥링크). 미지원은 조용히 무시 |
-| google_mobile_ads 플러그인 (`lib/platform/ads.dart`, 배너 위젯 `lib/ui/components/ad_banner.dart`) | Flutter → OS | AdMob 배너 — ADR-001 Platform View 허용 목록(광고). 하단 고정: 루트 셸 글라스 네비 위(내정보 탭 제외) + 트립 진행 화면. 온보딩엔 금지. ⚠️ 현재 테스트 ID — 실계정 발급 후 ads.dart + Manifest/Info.plist 교체 |
+| google_mobile_ads 플러그인 (`lib/platform/ads.dart`, 배너 위젯 `lib/ui/components/ad_banner.dart`) | Flutter → OS | AdMob 배너 — ADR-001 Platform View 허용 목록(광고). 각 탭 스크롤 콘텐츠 맨 아래(내정보 탭 제외, 메인 탭은 하차 알림·통근 기록 섹션 사이, 출발 알림 탭은 피드백 카드·도착 목록 사이) + 트립 진행 화면은 종료 버튼 위 MREC(300×250, 동영상 크리에이티브 가능). 화면 고정 플로팅 금지(2026-09-19)·온보딩 금지. ⚠️ 현재 테스트 ID — 실계정 발급 후 ads.dart + Manifest/Info.plist 교체 |
 
 ## 위젯·Live Activity 데이터 계약
 

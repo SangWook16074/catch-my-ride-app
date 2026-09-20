@@ -7,6 +7,7 @@ import '../data/api.dart';
 import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
+import 'components/ad_banner.dart';
 import 'components/center_message.dart';
 import 'components/fade_route.dart';
 import 'components/tab_header.dart';
@@ -387,6 +388,9 @@ class _JourneyPageState extends State<JourneyPage> {
                 onPressed: () => unawaited(_openCreate()),
               ),
             ),
+          // 광고는 여정 목록·만들기 버튼 아래 스크롤 끝 — 시작 동선을 가로막지 않고,
+          // 화면에 고정해 따라다니지 않는다 (오너 결정 2026-09-19: 셸 하단 플로팅 폐기)
+          const AdBanner(),
         ];
     }
   }

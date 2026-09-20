@@ -37,6 +37,8 @@ class PushRegistrar {
 
   /// 앱 시작 — 다이얼로그 없이 상태 동기화 + 토큰 로테이션 구독
   Future<void> syncIfAuthorized() async {
+    // iOS: 앱이 떠 있어도 하차·환승 푸시(§9-4)가 배너로 보이게 (권한과 무관한 표시 옵션)
+    unawaited(_bridge.enableForegroundBanners());
     _refreshSub ??= _bridge.onTokenRefresh.listen((_) {
       unawaited(_registerToken());
     });

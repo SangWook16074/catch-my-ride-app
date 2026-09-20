@@ -103,12 +103,63 @@ CommuteReport buildCommuteReport(List<FeedbackEntry> entries, DateTime today) {
   );
 }
 
-/// "2026-09-16" → "9월 16일 (수)" — 리포트 이력 행 표시용. 파싱 불가면 원본 유지
-String formatReportDate(String date) {
-  final parsed = DateTime.tryParse(date);
-  if (parsed == null) {
-    return date;
+/// 잔디 한 칸의 기록 상태 — 기록 없는 날은 [GrassDay.status]가 null이다
+enum GrassStatus { boarded, missed }
+
+/// 잔디 그리드의 하루 칸
+class GrassDay {
+  const GrassDay({required this.date, this.status});
+
+  final DateTime date;
+
+  /// null = 기록 없음 (주말·휴가·미응답 — 실패가 아니다, §9 성공 중심 톤)
+  final GrassStatus? status;
+}
+
+/// 깃허브 잔디식 주×요일 그리드 — 열은 오래된 주 → 이번 주(마지막), 각 열은 월~일 7칸.
+/// 오늘 이후 칸은 null(아직 오지 않은 날 — 그리지 않는다).
+/// 형식 오류·미래 날짜 기록은 [buildCommuteReport]와 같은 이유로 무시한다.
+List<List<GrassDay?>> buildCommuteGrass(
+  List<FeedbackEntry> entries,
+  DateTime today, {
+  required int weeks,
+}) {
+  final day = DateTime(today.year, today.month, today.day);
+  final monday = day.subtract(Duration(days: day.weekday - 1));
+  final byDate = <String, GrassStatus>{};
+  for (final entry in entries) {
+    final parsed = DateTime.tryParse(entry.date);
+    if (parsed == null || parsed.isAfter(day)) {
+      continue;
+    }
+    byDate[entry.date] = entry.result == BoardingResult.boarded
+        ? GrassStatus.boarded
+        : GrassStatus.missed;
   }
-  const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
-  return '${parsed.month}월 ${parsed.day}일 (${weekdays[parsed.weekday - 1]})';
+  return [
+    for (var week = weeks - 1; week >= 0; week--)
+      [
+        for (var weekday = 0; weekday < 7; weekday++)
+          _grassDay(
+            monday.add(Duration(days: weekday - week * 7)),
+            day,
+            byDate,
+          ),
+      ],
+  ];
+}
+
+GrassDay? _grassDay(
+  DateTime date,
+  DateTime today,
+  Map<String, GrassStatus> byDate,
+) {
+  if (date.isAfter(today)) {
+    return null;
+  }
+  final key =
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+  return GrassDay(date: date, status: byDate[key]);
 }

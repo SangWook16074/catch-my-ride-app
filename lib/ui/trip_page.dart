@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../data/api.dart';
 import '../data/trip_store.dart';
@@ -109,6 +110,16 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
       final status = await api.getTrip(widget.tripId);
       if (!mounted) {
         return;
+      }
+      // 화면을 보는 중에도 내릴 타이밍을 몸으로 알린다 — 도착 직전·환승·완료로
+      // 넘어가는 순간 1회 (2026-09-19 실주행: 푸시만으로는 환승을 놓치기 쉽다)
+      final previousPhase = _status?.phase;
+      if (previousPhase != null &&
+          previousPhase != status.phase &&
+          (status.phase == TripPhase.arriving ||
+              status.phase == TripPhase.transfer ||
+              status.phase == TripPhase.done)) {
+        HapticFeedback.heavyImpact();
       }
       unawaited(_liveActivity.update(status)); // 잠금화면 카운트다운 갱신 (FR-705)
       setState(() {
@@ -241,23 +252,37 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(widget.journeyLabel, style: AppTypo.heading),
       ),
-      // 트립 진행 중에도 배너 노출 (오너 결정 2026-09-16 2차: 트립 화면 금지 폐기 —
-      // 화면을 오래 보는 구간이라 내정보 대신 여기에 둔다). 종료 버튼 아래 하단 고정
-      bottomNavigationBar: const SafeArea(top: false, child: AdBanner()),
+      // 본문·광고·종료 버튼을 하단에 한 묶음으로 붙인다 — 남는 여백은 요소 사이에
+      // 끼우지 않고 위쪽으로만 몬다 (오너 피드백 2026-09-19 2차). 작은 화면에서
+      // 묶음이 화면보다 길어지면 넘치는 대신 스크롤로 강등한다
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.xl),
-          child: Column(
-            children: [
-              Expanded(child: Center(child: _body())),
-              if (!_gone && _status?.phase != TripPhase.done)
-                AppButton(
-                  label: '트립 종료',
-                  variant: AppButtonVariant.tonal,
-                  block: true,
-                  onPressed: () => unawaited(_end()),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpace.xl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _body(),
+                    // 트립 진행 중에도 광고 노출 (오너 결정 2026-09-16 2차: 트립 화면
+                    // 금지 폐기 — 화면을 오래 보는 구간이라 내정보 대신 여기에 둔다).
+                    // 종료 버튼 위 MREC(300×250, 동영상 크리에이티브 가능).
+                    // reserveSpace: 로드 전에도 300×250 자리를 잡아둔다 — 광고가 늦게
+                    // 뜰 때 카운트다운·버튼이 밀리는 것 방지 (오너 피드백 2026-09-19 3차)
+                    const AdBanner(size: AdSize.mediumRectangle, reserveSpace: true),
+                    if (!_gone && _status?.phase != TripPhase.done)
+                      AppButton(
+                        label: '트립 종료',
+                        variant: AppButtonVariant.tonal,
+                        block: true,
+                        onPressed: () => unawaited(_end()),
+                      ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
         ),
       ),
