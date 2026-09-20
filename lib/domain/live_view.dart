@@ -32,31 +32,13 @@ Arrival? pickBestBoardable(List<Arrival> arrivals) {
   return null;
 }
 
-/// 알림 안내 문구 (FR-501 개정 2026-09-20) — 유저가 정한 여유 시간과 "몇 분 전에 알림이
-/// 오는지"를 라이브 뷰에 보여준다. 타이밍 규칙은 서버 DepartureTimingService와 동일:
-/// 미리 알림 = 출발 {여유}분 전, 리마인드 = 출발 1분 전 (여유가 2분 미만이면 리마인드만 —
-/// 미리 알림 시점이 리마인드와 겹쳐 서버가 리마인드로만 발송한다).
+/// 알림 안내 문구 (FR-501 개정, 오너 문구 확정 2026-09-20) — "몇 분 전에 알림이 오는지"를
+/// 라이브 뷰에 보여준다. N = 여유 버퍼(사전 알림 = 출발 {여유}분 전, 서버
+/// DepartureTimingService와 동일). 여유가 2분 미만이면 사전 알림이 리마인드와 겹쳐
+/// 리마인드만 발송되므로 실제 발송 시점인 1분으로 안내한다.
 String notificationSummary(CommuteSetting setting) {
-  final buffer = setting.bufferMinutes;
-  final departure = setting.fixedDepartureTime;
-  if (setting.notificationMode == NotificationMode.fixed && departure != null) {
-    final times = buffer >= 2
-        ? '${_minusMinutes(departure, buffer)}와 ${_minusMinutes(departure, 1)}'
-        : _minusMinutes(departure, 1);
-    return '여유 $buffer분 · $departure 출발 — $times에 알림이 와요';
-  }
-  return buffer >= 2
-      ? '여유 $buffer분 — 나가야 할 시각 $buffer분 전과 1분 전에 알림이 와요'
-      : '여유 $buffer분 — 나가야 할 시각 1분 전에 알림이 와요';
-}
-
-String _minusMinutes(String hhmm, int minutes) {
-  final parts = hhmm.split(':');
-  final total =
-      (int.parse(parts[0]) * 60 + int.parse(parts[1]) - minutes + 24 * 60) %
-      (24 * 60);
-  String pad(int n) => n.toString().padLeft(2, '0');
-  return '${pad(total ~/ 60)}:${pad(total % 60)}';
+  final minutes = setting.bufferMinutes >= 1 ? setting.bufferMinutes : 1;
+  return '현재 여유있게 $minutes분 전에 알림을 보내드려요';
 }
 
 String formatFetchedAt(String iso) {
