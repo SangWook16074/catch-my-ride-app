@@ -517,10 +517,20 @@ class _StopCandidate {
   List<RouteOption> routes = const [];
   _RoutesStatus routesStatus = _RoutesStatus.loading;
 
+  /// §5-3 방면 선택지 (지하철 전용) — 노선을 처음 고를 때 로딩. 실패해도 폴백 키가 채워진다
+  List<DirectionOption> directions = const [];
+  _DirectionsStatus directionsStatus = _DirectionsStatus.idle;
+
+  /// 방면을 조회한 기준 호선 — 다른 호선으로 바뀌면 다시 조회한다
+  /// (신도림 1호선↔2호선처럼 키 체계가 다를 수 있다)
+  String? directionsLine;
+
   String get key => '${type.wire}:$stopId';
 }
 
 enum _RoutesStatus { loading, ready, error }
+
+enum _DirectionsStatus { idle, loading, ready }
 
 class _StopsStep extends StatefulWidget {
   const _StopsStep({required this.draft, required this.update});
@@ -557,6 +567,14 @@ class _StopsStepState extends State<_StopsStep> {
     // (실패해도 이미 고른 노선으로 진행 가능, 후보별 재시도 제공)
     for (final candidate in _candidates) {
       unawaited(_loadRoutes(candidate));
+      // 재설정 프리필 — 이미 노선을 고른 지하철 후보는 방면 선택지도 함께 로딩한다
+      final selected = widget.draft.stops
+          .where((s) => _draftStopKey(s) == candidate.key)
+          .firstOrNull;
+      final firstRoute = selected?.routes.firstOrNull;
+      if (candidate.type == StopType.subway && firstRoute != null) {
+        unawaited(_loadDirections(candidate, firstRoute));
+      }
     }
   }
 
@@ -614,6 +632,27 @@ class _StopsStepState extends State<_StopsStep> {
       if (mounted) {
         setState(() => candidate.routesStatus = _RoutesStatus.error);
       }
+    }
+  }
+
+  /// §5-3 방면 선택지 — 실패해도 폴백 키(상행/하행·내선/외선)로 선택은 계속 가능하다 (NFR-03)
+  Future<void> _loadDirections(_StopCandidate candidate, String route) async {
+    setState(() {
+      candidate.directionsStatus = _DirectionsStatus.loading;
+      candidate.directionsLine = lineOf(route);
+    });
+    List<DirectionOption> directions;
+    try {
+      final loaded = await api.getStopDirections(candidate.stopId, route);
+      directions = loaded.isEmpty ? fallbackDirections(route) : loaded;
+    } catch (_) {
+      directions = fallbackDirections(route);
+    }
+    if (mounted) {
+      setState(() {
+        candidate.directions = directions;
+        candidate.directionsStatus = _DirectionsStatus.ready;
+      });
     }
   }
 
@@ -680,7 +719,40 @@ class _StopsStepState extends State<_StopsStep> {
                 )
                 .toList();
     }
+    // 지하철 방면 선택지 로딩 — 첫 선택 노선의 호선 기준. 호선이 바뀌면(예: 신도림 1호선→2호선)
+    // 키 자체가 달라질 수 있어 다시 조회하고, 이미 고른 방면은 초기화한다
+    final next = stops
+        .where((s) => _draftStopKey(s) == candidate.key)
+        .firstOrNull;
+    final firstRoute = next?.routes.firstOrNull;
+    if (candidate.type == StopType.subway &&
+        firstRoute != null &&
+        candidate.directionsLine != lineOf(firstRoute)) {
+      stops = stops
+          .map(
+            (s) => _draftStopKey(s) == candidate.key
+                ? s.copyWith(direction: null)
+                : s,
+          )
+          .toList();
+      unawaited(_loadDirections(candidate, firstRoute));
+    }
     widget.update(draft.copyWith(stops: stops));
+  }
+
+  /// 방면 단일 선택 — 지하철은 방면 없이는 다음 단계로 못 간다 (canProceed)
+  void _selectDirection(_StopCandidate candidate, String key) {
+    widget.update(
+      widget.draft.copyWith(
+        stops: widget.draft.stops
+            .map(
+              (s) => _draftStopKey(s) == candidate.key
+                  ? s.copyWith(direction: key)
+                  : s,
+            )
+            .toList(),
+      ),
+    );
   }
 
   @override
@@ -823,6 +895,32 @@ class _StopsStepState extends State<_StopsStep> {
             ),
           ),
         },
+        // 지하철 방면 선택 (§5-3, FR-103 개정) — 노선을 고른 뒤에만, 필수
+        if (candidate.type == StopType.subway && selected != null) ...[
+          const _Helper('방면을 골라주세요. 고른 방면의 열차만 안내해요'),
+          if (candidate.directionsStatus != _DirectionsStatus.ready)
+            Text(
+              '방면을 불러오는 중이에요…',
+              style: AppTypo.caption.copyWith(color: context.colors.inkSubtle),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final direction in candidate.directions)
+                    AppChip(
+                      label: direction.label,
+                      selected: selected.direction == direction.key,
+                      onPressed: () =>
+                          _selectDirection(candidate, direction.key),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ],
     );
   }

@@ -41,6 +41,41 @@ void main() {
     });
   });
 
+  group('방면 (§5-3)', () {
+    test('lineOf — 급행/일반 접미사를 호선으로 접는다', () {
+      expect(lineOf('9호선 급행'), '9호선');
+      expect(lineOf('9호선 일반'), '9호선');
+      expect(lineOf('수인분당선'), '수인분당선');
+    });
+
+    test('fallbackDirections — 조회 실패 시 상행/하행, 2호선은 내선/외선 (라벨=키)', () {
+      expect(
+        fallbackDirections('9호선 급행'),
+        const [
+          DirectionOption(key: '상행', label: '상행'),
+          DirectionOption(key: '하행', label: '하행'),
+        ],
+      );
+      expect(
+        fallbackDirections('2호선').map((d) => d.key),
+        ['내선', '외선'],
+      );
+    });
+
+    test('CommuteStop.copyWith(direction: null)로 방면을 지울 수 있다 — 호선 변경 시 초기화', () {
+      const stop = CommuteStop(
+        type: StopType.subway,
+        stopId: '신도림',
+        displayName: '신도림역',
+        routes: ['1호선'],
+        direction: '상행',
+      );
+      expect(stop.copyWith().direction, '상행');
+      expect(stop.copyWith(direction: null).direction, isNull);
+      expect(stop.copyWith(direction: '내선'), isNot(equals(stop)));
+    });
+  });
+
   group('canProceed', () {
     test('home — 집 위치가 있어야 진행', () {
       expect(canProceed(OnboardingStep.home, OnboardingDraft.empty()), isFalse);
@@ -75,6 +110,41 @@ void main() {
           OnboardingDraft.empty().copyWith(stops: const [_stop]),
         ),
         isTrue,
+      );
+    });
+
+    test('stops — 지하철은 방면까지 골라야 진행 (FR-103 개정), 버스는 방면 없이 진행', () {
+      const subwayNoDirection = CommuteStop(
+        type: StopType.subway,
+        stopId: '여의도',
+        displayName: '여의도역',
+        routes: ['9호선 급행'],
+      );
+      expect(
+        canProceed(
+          OnboardingStep.stops,
+          OnboardingDraft.empty().copyWith(stops: const [subwayNoDirection]),
+        ),
+        isFalse,
+      );
+      expect(
+        canProceed(
+          OnboardingStep.stops,
+          OnboardingDraft.empty().copyWith(
+            stops: [subwayNoDirection.copyWith(direction: '상행')],
+          ),
+        ),
+        isTrue,
+      );
+      // 버스 + 방면 없는 지하철이 섞이면 지하철 하나 때문에 막힌다
+      expect(
+        canProceed(
+          OnboardingStep.stops,
+          OnboardingDraft.empty().copyWith(
+            stops: const [_stop, subwayNoDirection],
+          ),
+        ),
+        isFalse,
       );
     });
 

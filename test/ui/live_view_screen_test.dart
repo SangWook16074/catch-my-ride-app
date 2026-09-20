@@ -84,4 +84,71 @@ void main() {
     // 상태 문구는 색상 외 수단으로 그대로 전달 (NFR-06)
     expect(find.text('다음 차를 노리세요'), findsNWidgets(2));
   });
+
+  group('푸시 재동의 배너 (미니앱 2026-09-14 이식)', () {
+    final response = ArrivalsResponse(
+      fetchedAt: DateTime(2026, 9, 14, 8).toIso8601String(),
+      realtimeAvailable: true,
+      walkMinutes: 8,
+      arrivals: [
+        _arrival(
+          routeName: '720',
+          seconds: 600,
+          boardable: true,
+          status: ArrivalStatus.relaxed,
+        ),
+      ],
+    );
+
+    Future<void> pump(
+      WidgetTester tester, {
+      required PushBannerState state,
+      VoidCallback? onEnable,
+      VoidCallback? onDismiss,
+    }) {
+      return tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(Brightness.light),
+          home: Scaffold(
+            body: LiveViewScreen(
+              response: response,
+              stale: false,
+              todayFeedback: null,
+              onSubmitFeedback: (_) {},
+              pushBanner: state,
+              onEnablePush: onEnable,
+              onDismissPushBanner: onDismiss,
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('hidden이면 배너가 없다', (tester) async {
+      await pump(tester, state: PushBannerState.hidden);
+      expect(find.text('출발 알림이 꺼져 있어요'), findsNothing);
+    });
+
+    testWidgets('visible — "알림 켜기"·"나중에"가 콜백을 부른다', (tester) async {
+      var enabled = 0;
+      var dismissed = 0;
+      await pump(
+        tester,
+        state: PushBannerState.visible,
+        onEnable: () => enabled++,
+        onDismiss: () => dismissed++,
+      );
+      expect(find.text('출발 알림이 꺼져 있어요'), findsOneWidget);
+      await tester.tap(find.text('알림 켜기'));
+      await tester.tap(find.text('나중에'));
+      expect(enabled, 1);
+      expect(dismissed, 1);
+    });
+
+    testWidgets('enabled — 확인 문구로 바뀐다', (tester) async {
+      await pump(tester, state: PushBannerState.enabled);
+      expect(find.text('출발 알림이 꺼져 있어요'), findsNothing);
+      expect(find.textContaining('출발 알림을 켰어요'), findsOneWidget);
+    });
+  });
 }

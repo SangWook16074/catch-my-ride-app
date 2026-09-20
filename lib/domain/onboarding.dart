@@ -95,6 +95,22 @@ bool recommendedModeIsEstimated(OnboardingDraft draft) {
       draft.stops.any((stop) => stop.type == StopType.subway);
 }
 
+/// "9호선 급행"/"9호선 일반" → "9호선" — 방면 조회·폴백의 기준 호선 (서버 §5-3과 동일 규칙)
+String lineOf(String route) => route.replaceFirst(RegExp(r' (급행|일반)$'), '');
+
+/// §5-3 방면 조회가 실패했을 때의 클라이언트 폴백 — 서버 폴백 키와 동일한 규칙.
+/// 라벨 없는 키만으로도 선택은 가능해야 온보딩이 네트워크 실패에 막히지 않는다 (NFR-03)
+List<DirectionOption> fallbackDirections(String route) {
+  final keys = lineOf(route) == '2호선' ? ['내선', '외선'] : ['상행', '하행'];
+  return [for (final key in keys) DirectionOption(key: key, label: key)];
+}
+
+/// 지하철은 방면까지 골라야 완료 — 반대 방향 열차로 추천·푸시가 나가는 것을 막는다 (FR-103 개정).
+/// 버스는 정류장이 곧 방향이라 방면을 고르지 않는다 (v0.6)
+bool stopComplete(CommuteStop stop) =>
+    stop.routes.isNotEmpty &&
+    (stop.type != StopType.subway || stop.direction != null);
+
 final RegExp _timePattern = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
 
 bool isValidTime(String time) => _timePattern.hasMatch(time);
@@ -110,8 +126,8 @@ bool canProceed(OnboardingStep step, OnboardingDraft draft) {
     case OnboardingStep.home:
       return draft.home != null;
     case OnboardingStep.stops:
-      return draft.stops.isNotEmpty &&
-          draft.stops.every((stop) => stop.routes.isNotEmpty);
+      // 기존 경로 재설정 프리필(direction 없음)도 여기서 걸려 방면을 고르고 지나가게 된다
+      return draft.stops.isNotEmpty && draft.stops.every(stopComplete);
     case OnboardingStep.walk:
       final walk = draft.walkMinutes;
       return walk != null && walk >= 1;

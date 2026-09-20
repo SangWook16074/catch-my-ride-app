@@ -49,6 +49,7 @@ class CommuteStop {
     required this.stopId,
     required this.displayName,
     required this.routes,
+    this.direction,
   });
 
   final StopType type;
@@ -58,12 +59,25 @@ class CommuteStop {
   final String displayName;
   final List<String> routes;
 
-  CommuteStop copyWith({List<String>? routes}) => CommuteStop(
+  /// 지하철 방면 키(API.md v0.4 §1 `stops[].direction` = §5-3 `directions[].key`:
+  /// "상행"/"하행", 2호선 "내선"/"외선"). 저장되면 도착·추천·푸시가 이 방면 열차로만 좁혀진다.
+  /// null = 전 방면(구버전 경로 하위호환). 버스는 정류장이 곧 방향이라 항상 null.
+  /// 신규 온보딩은 지하철에서 필수 선택 (FR-103 개정)
+  final String? direction;
+
+  /// [direction]은 null로 "지우기"가 필요해(호선 변경 시 초기화) sentinel 방식으로 patch한다
+  CommuteStop copyWith({
+    List<String>? routes,
+    Object? direction = _unset,
+  }) => CommuteStop(
     type: type,
     stopId: stopId,
     displayName: displayName,
     routes: routes ?? List.of(this.routes),
+    direction: direction == _unset ? this.direction : direction as String?,
   );
+
+  static const Object _unset = Object();
 
   @override
   bool operator ==(Object other) =>
@@ -71,11 +85,12 @@ class CommuteStop {
       other.type == type &&
       other.stopId == stopId &&
       other.displayName == displayName &&
-      listEquals(other.routes, routes);
+      listEquals(other.routes, routes) &&
+      other.direction == direction;
 
   @override
   int get hashCode =>
-      Object.hash(type, stopId, displayName, Object.hashAll(routes));
+      Object.hash(type, stopId, displayName, Object.hashAll(routes), direction);
 }
 
 enum NotificationMode {
@@ -253,6 +268,24 @@ class RouteOption {
 
   /// 버스 방면 표기("강남역 방면", v0.6) — 반대편 정류장 선택을 알아채게 한다. 지하철·미제공 시 null
   final String? directionLabel;
+}
+
+/// API.md §5-3 — 지하철 방면 선택지 (온보딩 FR-103 개정). [key]는 CommuteStop.direction에 저장하는 값
+class DirectionOption {
+  const DirectionOption({required this.key, required this.label});
+
+  /// 상류 updnLine 그대로 — "상행"/"하행", 2호선 "내선"/"외선"
+  final String key;
+
+  /// 사람이 읽는 표기("당고개 방면") — 실시간 행선지가 없으면 key와 동일(폴백)
+  final String label;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DirectionOption && other.key == key && other.label == label;
+
+  @override
+  int get hashCode => Object.hash(key, label);
 }
 
 /// API.md §7 — 주소 검색(지오코딩) 결과

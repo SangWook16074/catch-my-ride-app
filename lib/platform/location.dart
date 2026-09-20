@@ -6,13 +6,17 @@
 /// **최초 사용자의 첫 시도가 무조건 실패**한다. 권한 확인 → (필요 시) 다이얼로그 →
 /// 허용된 뒤에만 측위를 시작하고, 동의창을 읽는 시간에는 제한을 두지 않는다.
 ///
-/// 측위 전략(미니앱 onboarding.tsx와 동일 취지): 고정밀은 3초까지만 기다리고 늦으면
-/// 저정밀로 강등(전체 12초 상한). 일시 오류는 1회 자동 재시도하되, 권한 거부·타임아웃은
+/// 측위 전략(미니앱 onboarding.tsx 2026-09-10 개정과 동일): 고정밀(GPS)과 저정밀(와이파이·기지국)을
+/// **처음부터 동시에** 요청하고, 3초까지는 고정밀을 우선한다. 고정밀이 먼저 실패하면 즉시
+/// 저정밀 결과로 넘어가고, 둘 다 실패할 때만 실패다(전체 12초 상한). 기존 "고정밀 3초 → 저정밀
+/// 강등" 순차 방식은 실내에서 3초를 그냥 버렸고, 고정밀이 3초 안에 에러로 죽으면 저정밀 시도 없이
+/// 전면 실패했다(실내 실패율 주범). 일시 오류는 1회 자동 재시도하되, 권한 거부·타임아웃은
 /// 재시도하지 않는다 — 지도 확인 + 주소 검색 폴백(FR-101 보완)이 있어 수백 m 오차는
 /// 유저가 즉시 교정한다.
 library;
 
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:geolocator/geolocator.dart';
 
@@ -21,8 +25,11 @@ import '../domain/models.dart';
 /// 권한 거부 — 위저드가 주소 등록 폴백을 안내한다
 class LocationPermissionDenied implements Exception {}
 
+/// 이 시간까지는 고정밀을 우선한다(정확도 우선) — 그 안에 오면 저정밀보다 고정밀 채택
 const Duration _highAccuracyWait = Duration(seconds: 3);
-const Duration _fallbackWait = Duration(seconds: 9); // 합쳐서 전체 12초 상한
+
+/// 전체 측위 상한 — 양쪽 요청 모두 이 시간에 타임아웃된다
+const Duration _totalWait = Duration(seconds: 12);
 const int _retries = 1;
 const Duration _retryDelay = Duration(seconds: 1);
 
@@ -56,11 +63,11 @@ Future<GeoPoint> requestCurrentLocation() async {
 }
 
 Future<GeoPoint> _read() async {
-  Future<GeoPoint> once(LocationAccuracy accuracy, Duration timeLimit) async {
+  Future<GeoPoint> once(LocationAccuracy accuracy) async {
     final position = await Geolocator.getCurrentPosition(
       locationSettings: LocationSettings(
         accuracy: accuracy,
-        timeLimit: timeLimit,
+        timeLimit: _totalWait,
       ),
     );
     return GeoPoint(
@@ -69,10 +76,45 @@ Future<GeoPoint> _read() async {
     );
   }
 
-  try {
-    return await once(LocationAccuracy.high, _highAccuracyWait);
-  } on TimeoutException {
-    // 고정밀이 상한을 넘김 — 저정밀로 강등해 한 번 더 시도한다
-    return once(LocationAccuracy.medium, _fallbackWait);
+  final startedAt = DateTime.now();
+  // 고정밀·저정밀을 동시에 시작 — 저정밀을 "고정밀 3초 초과 후"에야 시작하면 실내에서 3초를 버린다
+  final high = once(LocationAccuracy.high);
+  final balanced = once(LocationAccuracy.medium);
+  // 둘 다 실패할 때만 실패 — 한쪽 에러가 전체를 죽이지 않는다 (Future.any는 에러도 전파해 부적합)
+  final winner = _firstSuccess([high, balanced]);
+
+  // 3초까지는 고정밀 우선. 고정밀이 먼저 "실패"하면 null이 즉시 돌아와 대기 시간을 낭비하지 않는다
+  final highEarly = await Future.any<GeoPoint?>([
+    high.then<GeoPoint?>((point) => point, onError: (Object _) => null),
+    Future<GeoPoint?>.delayed(_highAccuracyWait, () => null),
+  ]);
+  final point = highEarly ?? await winner;
+  developer.log(
+    'location fixed in ${DateTime.now().difference(startedAt).inMilliseconds}ms '
+    '(source: ${highEarly != null ? 'high' : 'first-success'})',
+    name: 'location',
+  );
+  return point;
+}
+
+/// 먼저 성공하는 쪽 — 전부 실패할 때만 마지막 에러로 실패한다
+Future<T> _firstSuccess<T>(List<Future<T>> futures) {
+  final completer = Completer<T>();
+  var failures = 0;
+  for (final future in futures) {
+    future.then(
+      (value) {
+        if (!completer.isCompleted) {
+          completer.complete(value);
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        failures += 1;
+        if (failures == futures.length && !completer.isCompleted) {
+          completer.completeError(error, stack);
+        }
+      },
+    );
   }
+  return completer.future;
 }

@@ -122,6 +122,80 @@ void main() {
       final routes = await api.getStopRoutes(first.type, first.stopId);
       expect(routes, isNotEmpty);
     });
+
+    test('지하철 방면 선택지(§5-3) — 급행은 호선으로 접고, 모르는 노선은 폴백 키', () async {
+      final api = MockNochijimaApi();
+      final nine = await api.getStopDirections('여의도', '9호선 급행');
+      expect(nine.map((d) => d.key), ['상행', '하행']);
+      expect(nine.first.label, endsWith(' 방면'));
+      final unknown = await api.getStopDirections('어딘가', '경춘선');
+      expect(unknown, const [
+        DirectionOption(key: '상행', label: '상행'),
+        DirectionOption(key: '하행', label: '하행'),
+      ]);
+      final two = await api.getStopDirections('신도림', '2호선');
+      expect(two.map((d) => d.key), ['내선', '외선']);
+    });
+  });
+
+  group('방면 스코프 (§2 v0.4)', () {
+    const subway = CommuteStop(
+      type: StopType.subway,
+      stopId: '여의도',
+      displayName: '여의도역',
+      routes: ['9호선 일반'],
+    );
+
+    test('저장 방면이 있으면 그 방면 열차만, 행선지 표기가 붙는다', () async {
+      final api = MockNochijimaApi();
+      await api.createCommuteRoute(
+        CommuteRouteRequest(
+          label: '출근',
+          enabled: true,
+          setting: CommuteSetting(
+            home: _setting.home,
+            stops: [subway.copyWith(direction: '상행')],
+            walkMinutes: 8,
+            notificationMode: NotificationMode.fixed,
+            fixedDepartureTime: '07:40',
+            commuteWindow: null,
+            bufferMinutes: 2,
+            activeDays: const [DayOfWeek.mon],
+          ),
+        ),
+      );
+      final response = await api.getArrivals();
+      expect(response.arrivals, isNotEmpty);
+      expect(
+        response.arrivals.map((a) => a.directionLabel).toSet(),
+        {'개화행'},
+      );
+    });
+
+    test('방면 없는 구버전 경로는 전 방면 — 열차마다 행선지가 번갈아 온다', () async {
+      final api = MockNochijimaApi();
+      await api.createCommuteRoute(
+        CommuteRouteRequest(
+          label: '출근',
+          enabled: true,
+          setting: CommuteSetting(
+            home: _setting.home,
+            stops: const [subway],
+            walkMinutes: 8,
+            notificationMode: NotificationMode.fixed,
+            fixedDepartureTime: '07:40',
+            commuteWindow: null,
+            bufferMinutes: 2,
+            activeDays: const [DayOfWeek.mon],
+          ),
+        ),
+      );
+      final response = await api.getArrivals();
+      expect(
+        response.arrivals.map((a) => a.directionLabel).toSet(),
+        {'개화행', '중앙보훈병원행'},
+      );
+    });
   });
 
   group('역지오코딩 (§7-1)', () {

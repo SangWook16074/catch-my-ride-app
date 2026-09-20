@@ -5,7 +5,6 @@ import 'package:catch_my_ride/domain/models.dart';
 import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/my_info_page.dart';
 import 'package:catch_my_ride/ui/onboarding_page.dart';
-import 'package:catch_my_ride/ui/report_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -53,11 +52,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('나의 통근·경로·여정·알림·앱 정보 섹션을 보여준다 (개편 2026-09-16)', (tester) async {
+  testWidgets('경로·여정·알림·앱 정보 섹션을 보여준다 (통근 기록은 메인으로 이동, 2026-09-19)', (
+    tester,
+  ) async {
     await pumpPage(tester);
 
-    expect(find.text('나의 통근'), findsOneWidget);
-    expect(find.text('통근 기록'), findsOneWidget);
+    expect(find.text('나의 통근'), findsNothing);
+    expect(find.text('통근 기록'), findsNothing);
     expect(find.text('통근 경로'), findsOneWidget);
     expect(find.text('아직 경로가 없어요'), findsOneWidget);
     expect(find.text('+ 경로 추가'), findsOneWidget);
@@ -69,25 +70,6 @@ void main() {
     expect(find.text('푸시 알림'), findsOneWidget);
     expect(find.text('알림 정책'), findsOneWidget);
     expect(find.text('버전'), findsOneWidget);
-  });
-
-  testWidgets('피드백이 쌓이면 나의 통근 요약을 보여주고, 누르면 리포트가 열린다', (tester) async {
-    await api.postBoardingFeedback(
-      const BoardingFeedbackRequest(
-        result: BoardingResult.boarded,
-        notifiedDate: '2026-09-16',
-      ),
-    );
-    await pumpPage(tester);
-
-    expect(find.textContaining('회 탑승 · 연속'), findsOneWidget);
-
-    await tester.tap(find.text('통근 기록'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ReportPage), findsOneWidget);
-    expect(find.text('이번 주 탑승'), findsOneWidget);
-    expect(find.text('탔어요'), findsOneWidget);
   });
 
   testWidgets('등록된 여정을 여정 관리에 보여주고 삭제할 수 있다', (tester) async {

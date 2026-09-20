@@ -5,7 +5,8 @@ library;
 
 import '../domain/journey.dart';
 import '../domain/models.dart';
-import '../domain/onboarding.dart' show routeLabelMaxLength;
+import '../domain/onboarding.dart'
+    show fallbackDirections, lineOf, routeLabelMaxLength;
 import 'api.dart';
 
 final RegExp _timePattern = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
@@ -138,6 +139,36 @@ const List<_MockStop> _mockStops = [
 
 const int _maxResultsPerSource = 10;
 
+/// §5-3 mock — 호선별 방면 선택지. 실서버는 실시간 행선지로 라벨을 만들고, 없으면 key만 내려온다
+const Map<String, List<DirectionOption>> _mockDirections = {
+  '1호선': [
+    DirectionOption(key: '상행', label: '소요산 방면'),
+    DirectionOption(key: '하행', label: '신창 방면'),
+  ],
+  '5호선': [
+    DirectionOption(key: '상행', label: '방화 방면'),
+    DirectionOption(key: '하행', label: '하남검단산 방면'),
+  ],
+  '9호선': [
+    DirectionOption(key: '상행', label: '개화 방면'),
+    DirectionOption(key: '하행', label: '중앙보훈병원 방면'),
+  ],
+  '수인분당선': [
+    DirectionOption(key: '상행', label: '왕십리 방면'),
+    DirectionOption(key: '하행', label: '인천 방면'),
+  ],
+};
+
+/// 노선명 → 방면 선택지. 급행 접미사는 호선으로 접고, 모르는 노선은 폴백 키만 준다 (서버 §5-3과 동일)
+List<DirectionOption> _directionsForRoute(String route) =>
+    _mockDirections[lineOf(route)] ?? fallbackDirections(route);
+
+/// "당고개 방면" → "당고개행" — 도착 행에 표시하는 열차 행선지 mock. 폴백 키면 null
+String? _destinationLabel(DirectionOption option) =>
+    option.label.endsWith(' 방면')
+    ? '${option.label.substring(0, option.label.length - ' 방면'.length)}행'
+    : null;
+
 /// §7 지오코딩 mock 카탈로그 — 주소 등록 UX 검증에 필요한 만큼만
 const List<GeocodeResult> _mockAddresses = [
   GeocodeResult(
@@ -222,7 +253,7 @@ class MockNochijimaApi implements NochijimaApi {
         final key = '${stop.displayName}/$route';
         final isSubway = stop.type == StopType.subway;
         // 버스 방면 표기(v0.6) — 서버는 상류 adirection으로 채운다. mock은 정류장 데이터의 라벨 재사용
-        final directionLabel = isSubway
+        final busDirectionLabel = isSubway
             ? null
             : _mockStops
                   .where((s) => s.type == stop.type && s.stopId == stop.stopId)
@@ -230,7 +261,23 @@ class MockNochijimaApi implements NochijimaApi {
                   .where((r) => r.name == route)
                   .firstOrNull
                   ?.directionLabel;
+        // 지하철: 저장된 방면이 있으면 그 방면만 — 서버 match 필터와 동일 (v0.4, FR-501 개정).
+        // null이면 전 방면(구버전 경로 하위호환) — 열차마다 방면을 번갈아 붙인다
+        final subwayDirections = isSubway
+            ? _directionsForRoute(route)
+                  .where(
+                    (option) =>
+                        stop.direction == null || option.key == stop.direction,
+                  )
+                  .toList()
+            : const <DirectionOption>[];
+        var trainIndex = 0;
         for (final arrivalTs in _nextArrivalsFor(key, now)) {
+          final directionLabel = subwayDirections.isEmpty
+              ? busDirectionLabel
+              : _destinationLabel(
+                  subwayDirections[trainIndex++ % subwayDirections.length],
+                );
           final secondsToArrival = (arrivalTs - now) ~/ 1000;
           final minutes = (secondsToArrival / 60).round().clamp(1, 1 << 31);
           final remainingStops = isSubway
@@ -368,6 +415,13 @@ class MockNochijimaApi implements NochijimaApi {
     }
     return List.of(stop.routes);
   }
+
+  // §5-3 — 지하철 방면 선택지. 알 수 없는 노선도 폴백 키(상행/하행)를 준다 (서버와 동일)
+  @override
+  Future<List<DirectionOption>> getStopDirections(
+    String stopId,
+    String route,
+  ) async => List.of(_directionsForRoute(route));
 
   @override
   Future<List<GeocodeResult>> geocode(String query) async {

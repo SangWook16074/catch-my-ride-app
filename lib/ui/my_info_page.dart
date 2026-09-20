@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../data/api.dart';
 import '../data/push_registrar.dart';
-import '../domain/commute_report.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
 import '../domain/time_format.dart';
 import '../platform/app_info.dart';
 import '../platform/push.dart';
 import 'components/fade_route.dart';
+import 'components/push_settings_sheet.dart';
 import 'components/tab_header.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
@@ -19,14 +19,13 @@ import 'design/components/sheet.dart';
 import 'design/tokens.dart';
 import 'journey_create_page.dart';
 import 'onboarding_page.dart';
-import 'report_page.dart';
 
 /// §3-2·§9 기반 섹션의 로드 상태 — 미배포 서버(404)는 "준비 중"으로 강등
 enum _SectionPhase { loading, unavailable, failed, ready }
 
 /// 내정보 탭 — 계정이 없는 앱(익명 키)이라 "내 것"의 관리가 곧 내정보다 (개편 2026-09-16, 명세서 §9):
-/// 나의 통근(리포트 진입점) · 통근 경로 · 여정 관리 · 알림(상태+정책) · 앱 정보.
-/// 개편 방향: 설정 목록이 아니라 "내 통근의 기록과 자산"이 사는 곳 — 쌓인 기록이 리텐션이 된다.
+/// 통근 경로 · 여정 관리 · 알림(상태+정책) · 앱 정보.
+/// 통근 기록(잔디)은 메인 탭이 뎁스 없이 노출한다 (오너 결정 2026-09-19 — 리포트 화면 제거).
 class MyInfoPage extends StatefulWidget {
   const MyInfoPage({super.key, required this.active});
 
@@ -45,9 +44,6 @@ class _MyInfoPageState extends State<MyInfoPage> {
   bool _loadFailed = false;
   bool _pushAuthorized = false;
   String? _version;
-
-  _SectionPhase _reportPhase = _SectionPhase.loading;
-  List<FeedbackEntry> _feedback = [];
 
   _SectionPhase _journeyPhase = _SectionPhase.loading;
   List<Journey> _journeys = [];
@@ -69,7 +65,6 @@ class _MyInfoPageState extends State<MyInfoPage> {
   }
 
   Future<void> _load() async {
-    unawaited(_loadFeedback());
     unawaited(_loadJourneys());
     List<CommuteRoute>? routes;
     var failed = false;
@@ -95,33 +90,6 @@ class _MyInfoPageState extends State<MyInfoPage> {
       _loadFailed = failed;
       _pushAuthorized = authorized;
     });
-  }
-
-  Future<void> _loadFeedback() async {
-    try {
-      final feedback = await api.getFeedbackHistory();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _feedback = feedback;
-        _reportPhase = _SectionPhase.ready;
-      });
-    } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(
-        () => _reportPhase = error.status == 404
-            ? _SectionPhase.unavailable
-            : _SectionPhase.failed,
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() => _reportPhase = _SectionPhase.failed);
-    }
   }
 
   Future<void> _loadJourneys() async {
@@ -163,13 +131,6 @@ class _MyInfoPageState extends State<MyInfoPage> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => OnboardingPage(routeId: routeId)),
     );
-    unawaited(_load());
-  }
-
-  Future<void> _openReport() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ReportPage()));
     unawaited(_load());
   }
 
@@ -228,40 +189,7 @@ class _MyInfoPageState extends State<MyInfoPage> {
     }
     setState(() => _pushAuthorized = authorized);
     if (!authorized) {
-      unawaited(
-        showAppSheet<void>(
-          context: context,
-          header: '알림이 꺼져 있어요',
-          builder: (sheetContext) => Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpace.xl,
-              0,
-              AppSpace.xl,
-              AppSpace.lg,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '설정 앱 > 놓치지마 > 알림에서 켜주시면\n출발 타이밍 알림을 받을 수 있어요',
-                  style: AppTypo.bodySm.copyWith(
-                    color: sheetContext.colors.inkMuted,
-                  ),
-                ),
-                const SizedBox(height: AppSpace.md),
-                AppButton(
-                  label: '확인',
-                  variant: AppButtonVariant.tonal,
-                  medium: true,
-                  block: true,
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      unawaited(showPushSettingsSheet(context));
     }
   }
 
@@ -283,7 +211,7 @@ class _MyInfoPageState extends State<MyInfoPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '· 출근 1번에 최대 2번 — 출발 전 사전 알림과 1분 전 리마인드예요\n'
+                '· 출근 1번에 최대 2번이에요. 출발 전 사전 알림과 1분 전 리마인드예요\n'
                 '· 주말·미적용 요일, 공휴일(평일 경로)에는 보내지 않아요\n'
                 '· 그날 "탔어요"를 누르면 더 보내지 않아요',
                 style: AppTypo.bodySm.copyWith(
@@ -325,8 +253,6 @@ class _MyInfoPageState extends State<MyInfoPage> {
             bottom: MediaQuery.paddingOf(context).bottom + AppSpace.lg,
           ),
           children: [
-            _sectionHeader(context, '나의 통근'),
-            AppCard(child: _reportSection()),
             _sectionHeader(context, '통근 경로'),
             AppCard(child: _routesSection()),
             _sectionHeader(context, '여정 관리'),
@@ -390,7 +316,7 @@ class _MyInfoPageState extends State<MyInfoPage> {
                 horizontalPadding: 0,
                 contents: const Text('버전', style: AppTypo.body),
                 right: Text(
-                  _version ?? '—',
+                  _version ?? '확인 중',
                   style: AppTypo.bodySm.copyWith(
                     color: context.colors.inkMuted,
                   ),
@@ -403,6 +329,8 @@ class _MyInfoPageState extends State<MyInfoPage> {
     );
   }
 
+  /// 섹션 헤더 — 헤더 영역 타이틀(AppTypo.title)과 같은 폰트, 메인 탭과 동일
+  /// (오너 피드백 2026-09-19: 캡션은 눈에 안 들어온다)
   Widget _sectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -411,70 +339,8 @@ class _MyInfoPageState extends State<MyInfoPage> {
         AppSpace.xl,
         AppSpace.sm,
       ),
-      child: Text(
-        title,
-        style: AppTypo.caption.copyWith(color: context.colors.inkSubtle),
-      ),
+      child: Text(title, style: AppTypo.title),
     );
-  }
-
-  /// 나의 통근 — 리포트 요약 한 줄 + 상세 진입 (내정보를 "보러 오는 탭"으로 만드는 핵심)
-  Widget _reportSection() {
-    switch (_reportPhase) {
-      case _SectionPhase.loading:
-        return Text(
-          '불러오는 중…',
-          style: AppTypo.bodySm.copyWith(color: context.colors.inkSubtle),
-        );
-      case _SectionPhase.unavailable:
-        return Text(
-          '통근 기록은 서버 업데이트 후 볼 수 있어요',
-          style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
-        );
-      case _SectionPhase.failed:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '기록을 불러오지 못했어요',
-              style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
-            ),
-            const SizedBox(height: AppSpace.md),
-            AppButton(
-              label: '다시 시도',
-              variant: AppButtonVariant.tonal,
-              medium: true,
-              onPressed: () => unawaited(_loadFeedback()),
-            ),
-          ],
-        );
-      case _SectionPhase.ready:
-        final report = buildCommuteReport(_feedback, DateTime.now());
-        final summary = report.isEmpty
-            ? '아침 피드백이 쌓이면 기록을 보여드려요'
-            : '이번 주 ${report.weekBoarded}/${report.weekTotal}회 탑승 · 연속 ${report.currentStreak}회 성공';
-        return AppListRow(
-          horizontalPadding: 0,
-          contents: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('통근 기록', style: AppTypo.body),
-              Text(
-                summary,
-                style: AppTypo.caption.copyWith(
-                  color: context.colors.inkSubtle,
-                ),
-              ),
-            ],
-          ),
-          right: Icon(
-            Icons.chevron_right,
-            size: 20,
-            color: context.colors.inkSubtle,
-          ),
-          onPressed: () => unawaited(_openReport()),
-        );
-    }
   }
 
   /// 여정 관리 — 하차 알림 여정도 내정보에서 관리한다 (경로와의 비대칭 해소, §9 2026-09-16)

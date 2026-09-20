@@ -4,16 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/api.dart';
+import '../data/push_banner_store.dart';
+import '../data/push_registrar.dart';
 import '../data/suggestion_store.dart';
 import '../data/trip_store.dart';
 import '../domain/buffer_suggestion.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
+import '../domain/push_consent_banner.dart';
 import '../domain/push_entry.dart';
 import '../platform/deep_links.dart';
 import '../platform/push.dart';
 import 'components/center_message.dart';
 import 'components/fade_route.dart';
+import 'components/push_settings_sheet.dart';
 import 'components/route_delete_sheet.dart';
 import 'components/tab_header.dart';
 import 'components/route_rename_sheet.dart';
@@ -42,6 +46,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final SuggestionStore _suggestionStore = SuggestionStore();
+  final PushBannerStore _pushBannerStore = PushBannerStore();
   final TripStore _tripStore = TripStore();
 
   _Phase _phase = _Phase.loading;
@@ -56,6 +61,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// §3-1 버퍼 자동 추천 — 놓침이 잦으면 +5분 제안 카드
   BufferRecommendation? _bufferSuggestion;
   int? _appliedBufferMinutes;
+
+  /// 푸시 재동의 배너 (미니앱 2026-09-14 이식) — 권한 없이 경로만 쓰는 유저에게 다시 켤 길을 준다
+  PushBannerState _pushBanner = PushBannerState.hidden;
 
   Timer? _timer;
   bool _hasData = false;
@@ -73,6 +81,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refresh());
     unawaited(_checkBufferSuggestion());
+    unawaited(_checkPushBanner());
     unawaited(_initDeepLinks());
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_refresh()));
   }
@@ -91,6 +100,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // 잠금·백그라운드 동안 폴링 타이머가 멈춘다 — 돌아오면 즉시 갱신 (2026-09-15 실주행 피드백)
     if (state == AppLifecycleState.resumed) {
       unawaited(_refresh());
+      // 설정 앱에서 알림을 켜고 돌아온 경우 — 배너를 내린다
+      unawaited(_checkPushBanner());
     }
   }
 
@@ -274,6 +285,55 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (_) {
       // 추천 조회 실패는 조용히 무시 — 라이브 뷰 본편 흐름을 막지 않는다
     }
+  }
+
+  /// 세션 시작·복귀·온보딩 복귀 시 — 다이얼로그 없이 권한 상태만 조용히 확인한다.
+  /// 자동 재요청은 금지(연속 요청 함정, TODO 2026-09-09) — 배너는 수동 진입점이다
+  Future<void> _checkPushBanner() async {
+    // 방금 켠 확인 문구는 세션 동안 유지 — 재확인으로 덮지 않는다
+    if (_pushBanner == PushBannerState.enabled ||
+        _pushBanner == PushBannerState.enabling) {
+      return;
+    }
+    final authorized = await _push.isAuthorized();
+    final dismissedAt = await _pushBannerStore.readDismissedAt();
+    if (!mounted) {
+      return;
+    }
+    final show = shouldShowPushConsentBanner(
+      authorized,
+      dismissedAt,
+      DateTime.now(),
+    );
+    setState(
+      () => _pushBanner = show
+          ? PushBannerState.visible
+          : PushBannerState.hidden,
+    );
+  }
+
+  /// 배너 "알림 켜기" — 이때만 권한 다이얼로그가 뜬다(최초 1회). 이미 거부된 상태면 시스템이
+  /// 다이얼로그를 다시 띄우지 않으므로 설정 앱 안내 시트로 넘긴다. 실패면 배너를 유지해 재시도 가능
+  Future<void> _enablePush() async {
+    setState(() => _pushBanner = PushBannerState.enabling);
+    await pushRegistrar.ensureRegistered();
+    final authorized = await _push.isAuthorized();
+    if (!mounted) {
+      return;
+    }
+    setState(
+      () => _pushBanner = authorized
+          ? PushBannerState.enabled
+          : PushBannerState.visible,
+    );
+    if (!authorized) {
+      unawaited(showPushSettingsSheet(context));
+    }
+  }
+
+  void _dismissPushBanner() {
+    unawaited(_pushBannerStore.writeDismissedAt(DateTime.now()));
+    setState(() => _pushBanner = PushBannerState.hidden);
   }
 
   Future<void> _handleFeedback(BoardingResult result) async {
@@ -533,6 +593,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     // 온보딩·재설정에서 돌아오면 즉시 갱신 (미니앱 focus 리스너와 동일 역할)
     unawaited(_refresh());
+    // 온보딩 저장 직후 권한을 요청했을 수 있다 — 배너 노출 여부 재판정
+    unawaited(_checkPushBanner());
   }
 
   void _selectRoute(CommuteRoute route) {
@@ -731,6 +793,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       appliedBufferMinutes: _appliedBufferMinutes,
       onApplyBufferSuggestion: () => unawaited(_applySuggestion()),
       onDismissBufferSuggestion: _dismissSuggestion,
+      pushBanner: _pushBanner,
+      onEnablePush: () => unawaited(_enablePush()),
+      onDismissPushBanner: _dismissPushBanner,
     );
   }
 }

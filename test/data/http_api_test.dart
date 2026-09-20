@@ -32,6 +32,14 @@ final Map<String, dynamic> _settingJson = {
       'stopId': '19284',
       'displayName': '여의도환승센터',
       'routes': ['720', '261'],
+      'direction': null,
+    },
+    {
+      'type': 'SUBWAY',
+      'stopId': '수유',
+      'displayName': '수유역',
+      'routes': ['4호선'],
+      'direction': '상행',
     },
   ],
   'walkMinutes': 8,
@@ -94,8 +102,11 @@ void main() {
     expect(routes.single.id, 'migrated');
     final setting = routes.single.setting;
     expect(setting.home, const GeoPoint(latitude: 37.5219, longitude: 126.9245));
-    expect(setting.stops.single.type, StopType.seoulBus);
-    expect(setting.stops.single.routes, ['720', '261']);
+    expect(setting.stops.first.type, StopType.seoulBus);
+    expect(setting.stops.first.routes, ['720', '261']);
+    expect(setting.stops.first.direction, isNull);
+    // v0.4 지하철 방면 키 — 저장·조회 왕복
+    expect(setting.stops.last.direction, '상행');
     expect(setting.notificationMode, NotificationMode.fixed);
     expect(setting.fixedDepartureTime, '08:20');
     expect(setting.commuteWindow, isNull);
@@ -193,5 +204,24 @@ void main() {
 
     final address = await api.reverseGeocode(37.52, 126.92);
     expect(address.displayAddress, '여의도동 23');
+  });
+
+  test('지하철 방면 선택지 — §5-3 파싱, label 없으면 key로 폴백', () async {
+    final api = _api((request) async {
+      expect(request.url.path, '/api/v1/stops/directions');
+      expect(request.url.queryParameters['stopId'], '수유');
+      expect(request.url.queryParameters['route'], '4호선');
+      return _json({
+        'directions': [
+          {'key': '상행', 'label': '당고개 방면'},
+          {'key': '하행'},
+        ],
+      });
+    });
+    final directions = await api.getStopDirections('수유', '4호선');
+    expect(directions, const [
+      DirectionOption(key: '상행', label: '당고개 방면'),
+      DirectionOption(key: '하행', label: '하행'),
+    ]);
   });
 }

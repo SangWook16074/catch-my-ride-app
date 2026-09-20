@@ -198,6 +198,24 @@ class HttpNochijimaApi implements NochijimaApi {
   }
 
   @override
+  Future<List<DirectionOption>> getStopDirections(
+    String stopId,
+    String route,
+  ) async {
+    final json = await _get('/api/v1/stops/directions', {
+      'stopId': stopId,
+      'route': route,
+    }) as Map<String, dynamic>;
+    return [
+      for (final direction in json['directions'] as List<dynamic>)
+        DirectionOption(
+          key: (direction as Map<String, dynamic>)['key'] as String,
+          label: direction['label'] as String? ?? direction['key'] as String,
+        ),
+    ];
+  }
+
+  @override
   Future<List<GeocodeResult>> geocode(String query) async {
     final json =
         await _get('/api/v1/geocode', {'query': query}) as Map<String, dynamic>;
@@ -370,6 +388,8 @@ CommuteSetting _settingFromJson(Map<String, dynamic> json) {
           stopId: stop['stopId'] as String,
           displayName: stop['displayName'] as String,
           routes: [for (final r in stop['routes'] as List<dynamic>) r as String],
+          // v0.4 방면 키 — 구버전 경로는 누락/null(전 방면)
+          direction: stop['direction'] as String?,
         ),
     ],
     walkMinutes: (json['walkMinutes'] as num).toInt(),
@@ -401,6 +421,7 @@ Map<String, dynamic> _settingToJson(CommuteSetting setting) => {
         'stopId': stop.stopId,
         'displayName': stop.displayName,
         'routes': stop.routes,
+        'direction': stop.direction,
       },
   ],
   'walkMinutes': setting.walkMinutes,

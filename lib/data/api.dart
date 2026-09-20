@@ -41,6 +41,10 @@ abstract interface class NochijimaApi {
   /// §5-2 — 선택한 정류장/역의 경유 노선 목록
   Future<List<RouteOption>> getStopRoutes(StopType type, String stopId);
 
+  /// §5-3 — 지하철역×노선의 방면 선택지 (FR-103 개정). route는 §5-2 표기 그대로("9호선 급행"은
+  /// 서버가 호선으로 접는다). 실시간이 없으면 상행/하행(2호선 내선/외선) 폴백 키만 온다
+  Future<List<DirectionOption>> getStopDirections(String stopId, String route);
+
   /// §7 — 주소 → 좌표. query 2자 미만이면 400 INVALID_REQUEST. 결과 없으면 빈 배열
   Future<List<GeocodeResult>> geocode(String query);
 

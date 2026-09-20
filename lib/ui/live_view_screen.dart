@@ -8,8 +8,8 @@ import 'design/components/card.dart';
 import 'design/tokens.dart';
 
 /// 라이브 뷰 본문 — 미니앱 LiveViewScreen.tsx 이식.
-/// 위젯 배치(히어로 문구 → 안내 배너 → 피드백 카드 → 버퍼 추천 카드 → 도착 목록 → 갱신 시각
-/// 푸터)를 미니앱과 동일하게 유지한다. 스타일은 자체 디자인 시스템(design/tokens.dart).
+/// 위젯 배치(히어로 문구 → 안내 배너 → 피드백 카드 → 버퍼 추천 카드 → 푸시 재동의 배너 → 도착 목록
+/// → 갱신 시각 푸터)를 미니앱과 동일하게 유지한다. 스타일은 자체 디자인 시스템(design/tokens.dart).
 /// 탭 제목·삭제/재설정 액션은 HomePage의 공통 탭 헤더(TabHeader) 담당 (2026-09-16 헤더 통일).
 class LiveViewScreen extends StatelessWidget {
   const LiveViewScreen({
@@ -25,6 +25,9 @@ class LiveViewScreen extends StatelessWidget {
     this.appliedBufferMinutes,
     this.onApplyBufferSuggestion,
     this.onDismissBufferSuggestion,
+    this.pushBanner = PushBannerState.hidden,
+    this.onEnablePush,
+    this.onDismissPushBanner,
   });
 
   final ArrivalsResponse response;
@@ -50,6 +53,15 @@ class LiveViewScreen extends StatelessWidget {
   final int? appliedBufferMinutes;
   final VoidCallback? onApplyBufferSuggestion;
   final VoidCallback? onDismissBufferSuggestion;
+
+  /// 푸시 재동의 배너 (미니앱 2026-09-14 이식) — 알림 권한 없이 경로만 쓰는 유저에게 다시 켤 길을 준다
+  final PushBannerState pushBanner;
+
+  /// "알림 켜기" — 이때만 권한 다이얼로그(거부 상태면 설정 안내)가 뜬다
+  final VoidCallback? onEnablePush;
+
+  /// "나중에" — 7일간 다시 보여주지 않는다
+  final VoidCallback? onDismissPushBanner;
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +93,7 @@ class LiveViewScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpace.xs),
               Text(
-                '도보 ${response.walkMinutes}분 기준으로 비교해요',
+                '역까지 ${response.walkMinutes}분 걸려요',
                 style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
               ),
               if (setting != null) ...[
@@ -131,6 +143,20 @@ class LiveViewScreen extends StatelessWidget {
             suggestion: bufferSuggestion!,
             onApply: onApplyBufferSuggestion,
             onDismiss: onDismissBufferSuggestion,
+          ),
+
+        if (pushBanner == PushBannerState.enabled)
+          AppCard(
+            child: Text(
+              '출발 알림을 켰어요. 이제 나갈 타이밍에 맞춰 알려드릴게요',
+              style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
+            ),
+          )
+        else if (pushBanner != PushBannerState.hidden)
+          _PushConsentCard(
+            enabling: pushBanner == PushBannerState.enabling,
+            onEnable: onEnablePush,
+            onDismiss: onDismissPushBanner,
           ),
 
         for (final arrival in response.arrivals) _ArrivalRow(arrival: arrival),
@@ -268,6 +294,65 @@ class _SuggestionCard extends StatelessWidget {
               Expanded(
                 child: AppButton(
                   label: '괜찮아요',
+                  variant: AppButtonVariant.tonal,
+                  medium: true,
+                  block: true,
+                  onPressed: onDismiss,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 라이브 뷰 푸시 재동의 배너 상태 — visible=배너 / enabling=권한 요청 진행 중(버튼 로딩) /
+/// enabled=방금 켜짐(확인 문구) / hidden=없음
+enum PushBannerState { hidden, visible, enabling, enabled }
+
+/// "출발 알림이 꺼져 있어요" — 재동의 진입점. 권한 다이얼로그는 "알림 켜기"를 눌렀을 때만
+class _PushConsentCard extends StatelessWidget {
+  const _PushConsentCard({
+    required this.enabling,
+    required this.onEnable,
+    required this.onDismiss,
+  });
+
+  final bool enabling;
+  final VoidCallback? onEnable;
+  final VoidCallback? onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('출발 알림이 꺼져 있어요', style: AppTypo.heading),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            '알림을 켜면 나갈 타이밍에 맞춰 알려드려요. '
+            '화면을 보고 있지 않아도 놓치지 않아요',
+            style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  label: '알림 켜기',
+                  medium: true,
+                  block: true,
+                  loading: enabling,
+                  onPressed: enabling ? null : onEnable,
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: AppButton(
+                  label: '나중에',
                   variant: AppButtonVariant.tonal,
                   medium: true,
                   block: true,
