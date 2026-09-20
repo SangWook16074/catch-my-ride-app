@@ -74,4 +74,68 @@ void main() {
       expect(formatFetchedAt('2026-09-09T08:05:03'), '08:05:03');
     });
   });
+
+  group('notificationSummary — 여유·알림 시점 안내 (FR-501 개정 2026-09-20)', () {
+    CommuteSetting setting({
+      NotificationMode mode = NotificationMode.recommended,
+      String? fixedDepartureTime,
+      int bufferMinutes = 5,
+    }) => CommuteSetting(
+      home: const GeoPoint(latitude: 37.5, longitude: 126.9),
+      stops: const [],
+      walkMinutes: 8,
+      notificationMode: mode,
+      fixedDepartureTime: fixedDepartureTime,
+      commuteWindow: mode == NotificationMode.recommended
+          ? const CommuteWindow(start: '07:30', end: '09:30')
+          : null,
+      bufferMinutes: bufferMinutes,
+      activeDays: const [DayOfWeek.mon],
+    );
+
+    test('정시 모드 — 미리 알림·리마인드 실제 시각 (출발−버퍼 / 출발−1분)', () {
+      expect(
+        notificationSummary(
+          setting(mode: NotificationMode.fixed, fixedDepartureTime: '08:10'),
+        ),
+        '여유 5분 · 08:10 출발 — 08:05와 08:09에 알림이 와요',
+      );
+    });
+
+    test('정시 모드 자정 경계 — 하루를 넘어가도 음수가 되지 않는다', () {
+      expect(
+        notificationSummary(
+          setting(mode: NotificationMode.fixed, fixedDepartureTime: '00:03'),
+        ),
+        '여유 5분 · 00:03 출발 — 23:58와 00:02에 알림이 와요',
+      );
+    });
+
+    test('정시 모드 여유 2분 미만 — 미리 알림이 리마인드와 겹쳐 리마인드만 안내', () {
+      expect(
+        notificationSummary(
+          setting(
+            mode: NotificationMode.fixed,
+            fixedDepartureTime: '08:10',
+            bufferMinutes: 1,
+          ),
+        ),
+        '여유 1분 · 08:10 출발 — 08:09에 알림이 와요',
+      );
+    });
+
+    test('추천 모드 — 출발 시각이 유동적이라 "나가야 할 시각 기준"으로 안내', () {
+      expect(
+        notificationSummary(setting()),
+        '여유 5분 — 나가야 할 시각 5분 전과 1분 전에 알림이 와요',
+      );
+    });
+
+    test('추천 모드 여유 0분 — 리마인드만 안내', () {
+      expect(
+        notificationSummary(setting(bufferMinutes: 0)),
+        '여유 0분 — 나가야 할 시각 1분 전에 알림이 와요',
+      );
+    });
+  });
 }

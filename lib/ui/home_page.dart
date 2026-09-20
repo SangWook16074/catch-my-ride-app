@@ -719,6 +719,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
       response: response,
+      setting: _selectedRoute?.setting,
       stale: _stale,
       todayFeedback: _todayFeedback,
       onSubmitFeedback: (result) {

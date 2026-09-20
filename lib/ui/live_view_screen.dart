@@ -18,6 +18,7 @@ class LiveViewScreen extends StatelessWidget {
     required this.stale,
     required this.todayFeedback,
     required this.onSubmitFeedback,
+    this.setting,
     this.leading,
     this.topPadding = AppSpace.lg,
     this.bufferSuggestion,
@@ -27,6 +28,9 @@ class LiveViewScreen extends StatelessWidget {
   });
 
   final ArrivalsResponse response;
+
+  /// 현재 경로 설정 — 여유·알림 시점 안내(FR-501 개정 2026-09-20). null이면 안내를 숨긴다
+  final CommuteSetting? setting;
 
   /// 마지막 폴링 실패 — 이전 데이터를 표시 중 (NFR-07)
   final bool stale;
@@ -80,6 +84,15 @@ class LiveViewScreen extends StatelessWidget {
                 '도보 ${response.walkMinutes}분 기준으로 비교해요',
                 style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
               ),
+              if (setting != null) ...[
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  notificationSummary(setting!),
+                  style: AppTypo.caption.copyWith(
+                    color: context.colors.inkSubtle,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
