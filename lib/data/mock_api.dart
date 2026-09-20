@@ -81,8 +81,8 @@ const List<_MockStop> _mockStops = [
     displayName: '여의도환승센터',
     subtitle: '19284 · 영등포구',
     routes: [
-      RouteOption(name: '720', isExpress: null),
-      RouteOption(name: '261', isExpress: null),
+      RouteOption(name: '720', isExpress: null, directionLabel: '신촌 방면'),
+      RouteOption(name: '261', isExpress: null, directionLabel: '여의도 방면'),
       RouteOption(name: '5615', isExpress: null),
     ],
   ),
@@ -92,8 +92,8 @@ const List<_MockStop> _mockStops = [
     displayName: '국회의사당역',
     subtitle: '19169 · 영등포구',
     routes: [
-      RouteOption(name: '162', isExpress: null),
-      RouteOption(name: '262', isExpress: null),
+      RouteOption(name: '162', isExpress: null, directionLabel: '창동 방면'),
+      RouteOption(name: '262', isExpress: null, directionLabel: '중랑 방면'),
     ],
   ),
   _MockStop(
@@ -221,6 +221,15 @@ class MockNochijimaApi implements NochijimaApi {
       for (final route in stop.routes) {
         final key = '${stop.displayName}/$route';
         final isSubway = stop.type == StopType.subway;
+        // 버스 방면 표기(v0.6) — 서버는 상류 adirection으로 채운다. mock은 정류장 데이터의 라벨 재사용
+        final directionLabel = isSubway
+            ? null
+            : _mockStops
+                  .where((s) => s.type == stop.type && s.stopId == stop.stopId)
+                  .expand((s) => s.routes)
+                  .where((r) => r.name == route)
+                  .firstOrNull
+                  ?.directionLabel;
         for (final arrivalTs in _nextArrivalsFor(key, now)) {
           final secondsToArrival = (arrivalTs - now) ~/ 1000;
           final minutes = (secondsToArrival / 60).round().clamp(1, 1 << 31);
@@ -231,6 +240,7 @@ class MockNochijimaApi implements NochijimaApi {
             Arrival(
               stopDisplayName: stop.displayName,
               routeName: route,
+              directionLabel: directionLabel,
               secondsToArrival: secondsToArrival,
               remainingStops: remainingStops,
               isExpress: isSubway ? route.contains('급행') : null,

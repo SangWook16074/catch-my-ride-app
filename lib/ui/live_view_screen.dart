@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/live_view.dart';
 import '../domain/models.dart';
+import 'components/ad_banner.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/tokens.dart';
@@ -98,6 +99,10 @@ class LiveViewScreen extends StatelessWidget {
           todayFeedback: todayFeedback,
           onSubmitFeedback: onSubmitFeedback,
         ),
+
+        // 광고는 피드백 카드와 도착 목록(전철 정보) 사이에 깔린다 —
+        // 화면에 고정해 따라다니지 않는다 (오너 결정 2026-09-19)
+        const AdBanner(),
 
         if (appliedBufferMinutes != null)
           AppCard(
@@ -310,9 +315,13 @@ class _ArrivalRow extends StatelessWidget {
                   ],
                 ),
                 Text(
-                  arrival.remainingStops != null
-                      ? '${arrival.stopDisplayName} · ${arrival.remainingStops}정거장 전'
-                      : arrival.stopDisplayName,
+                  // FR-501 개정: 방면 표기 — 지하철 "수유역 · 당고개행", 버스 "여의도환승센터 · 강남역 방면"(v0.6)
+                  [
+                    arrival.stopDisplayName,
+                    if (arrival.directionLabel != null) arrival.directionLabel,
+                    if (arrival.remainingStops != null)
+                      '${arrival.remainingStops}정거장 전',
+                  ].join(' · '),
                   style: AppTypo.caption.copyWith(
                     color: context.colors.inkSubtle,
                   ),

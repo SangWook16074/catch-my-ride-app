@@ -192,6 +192,7 @@ class HttpNochijimaApi implements NochijimaApi {
         RouteOption(
           name: (route as Map<String, dynamic>)['name'] as String,
           isExpress: route['isExpress'] as bool?,
+          directionLabel: route['directionLabel'] as String?,
         ),
     ];
   }
@@ -424,6 +425,7 @@ Map<String, dynamic> _requestToJson(CommuteRouteRequest request) => {
 Arrival _arrivalFromJson(Map<String, dynamic> json) => Arrival(
   stopDisplayName: json['stopDisplayName'] as String,
   routeName: json['routeName'] as String,
+  directionLabel: json['directionLabel'] as String?,
   secondsToArrival: (json['secondsToArrival'] as num?)?.toInt(),
   remainingStops: (json['remainingStops'] as num?)?.toInt(),
   isExpress: json['isExpress'] as bool?,

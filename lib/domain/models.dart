@@ -186,10 +186,14 @@ class Arrival {
     required this.boardable,
     required this.status,
     required this.rawMessage,
+    this.directionLabel,
   });
 
   final String stopDisplayName;
   final String routeName;
+
+  /// 행선지·방면 표기 — 지하철 "당고개행" / 버스 "강남역 방면"(v0.6). 상류 미제공 시 null
+  final String? directionLabel;
 
   /// null = 실시간 정보 없음 (아는 척 금지 — "정보 없음" 표시)
   final int? secondsToArrival;
@@ -236,12 +240,19 @@ class StopSearchResult {
 
 /// API.md §5-2 — 정류장 경유 노선 (온보딩 FR-103)
 class RouteOption {
-  const RouteOption({required this.name, required this.isExpress});
+  const RouteOption({
+    required this.name,
+    required this.isExpress,
+    this.directionLabel,
+  });
 
   final String name;
 
   /// 지하철 급행 여부. 버스는 null
   final bool? isExpress;
+
+  /// 버스 방면 표기("강남역 방면", v0.6) — 반대편 정류장 선택을 알아채게 한다. 지하철·미제공 시 null
+  final String? directionLabel;
 }
 
 /// API.md §7 — 주소 검색(지오코딩) 결과

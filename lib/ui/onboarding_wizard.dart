@@ -812,7 +812,10 @@ class _StopsStepState extends State<_StopsStep> {
               children: [
                 for (final route in candidate.routes)
                   AppChip(
-                    label: route.name,
+                    // 버스 방면 표기(v0.6, FR-103 개정) — 반대편 정류장을 골랐으면 여기서 알아챈다
+                    label: route.directionLabel != null
+                        ? '${route.name} · ${route.directionLabel}'
+                        : route.name,
                     selected: selected?.routes.contains(route.name) ?? false,
                     onPressed: () => _toggleRoute(candidate, route.name),
                   ),
