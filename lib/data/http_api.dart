@@ -292,6 +292,19 @@ class HttpNochijimaApi implements NochijimaApi {
   }
 
   @override
+  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs) async {
+    final json =
+        await _send('POST', '/api/v1/trips', {
+              'legs': [for (final leg in legs) leg.toJson()],
+            })
+            as Map<String, dynamic>;
+    return TripStart(
+      tripId: json['tripId'] as String,
+      startedAt: json['startedAt'] as String,
+    );
+  }
+
+  @override
   Future<TripStatus> getTrip(String tripId) async =>
       _tripStatusFromJson(await _get('/api/v1/trips/$tripId') as Map<String, dynamic>);
 
@@ -342,16 +355,7 @@ Journey _journeyFromJson(Map<String, dynamic> json) => Journey(
 Map<String, dynamic> _journeyRequestToJson(JourneyRequest request) => {
   'label': request.label,
   'repeatDays': [for (final day in request.repeatDays) day.wire],
-  'legs': [
-    for (final leg in request.legs)
-      {
-        // v1은 지하철만 (API.md §9)
-        'type': 'SUBWAY',
-        'line': leg.line,
-        'boardStop': leg.boardStop,
-        'alightStop': leg.alightStop,
-      },
-  ],
+  'legs': [for (final leg in request.legs) leg.toJson()],
 };
 
 TripStatus _tripStatusFromJson(Map<String, dynamic> json) => TripStatus(

@@ -15,6 +15,8 @@ class CenterMessage extends StatelessWidget {
     required this.buttonLabel,
     required this.onPressed,
     this.titleLarge = false,
+    this.secondaryLabel,
+    this.onSecondaryPressed,
   });
 
   final String title;
@@ -24,6 +26,10 @@ class CenterMessage extends StatelessWidget {
 
   /// 온보딩류 초대 문구는 크게(AppTypo.title), 오류 안내는 기본(heading)
   final bool titleLarge;
+
+  /// 보조 동선(tonal) — 둘 다 있을 때만 주 버튼 아래에 붙는다
+  final String? secondaryLabel;
+  final VoidCallback? onSecondaryPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +59,14 @@ class CenterMessage extends StatelessWidget {
             ),
             const SizedBox(height: AppSpace.lg),
             AppButton(label: buttonLabel, onPressed: onPressed),
+            if (secondaryLabel != null && onSecondaryPressed != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              AppButton(
+                label: secondaryLabel!,
+                variant: AppButtonVariant.tonal,
+                onPressed: onSecondaryPressed,
+              ),
+            ],
           ],
         ),
       ),

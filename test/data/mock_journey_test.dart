@@ -124,4 +124,26 @@ void main() {
     await api.deleteJourney(journey.id);
     expect(() => api.getTrip(start.tripId), throwsA(isA<ApiException>()));
   });
+
+  test('1회성 트립(§9-2 POST /api/v1/trips) — 여정 목록은 그대로, 동시 1개·검증은 동일', () async {
+    final start = await api.startTripWithLegs(_request.legs);
+    expect(await api.listJourneys(), isEmpty); // 몰래 여정을 만들지 않는다 (FR-708)
+
+    final status = await api.getTrip(start.tripId);
+    expect(status.phase, TripPhase.tracking);
+    expect(status.eventStop, '당산');
+
+    // 동시 트립 1개 — 저장 여정 시작도 막힌다
+    final journey = await api.createJourney(_request);
+    expect(
+      () => api.startTrip(journey.id),
+      throwsA(isA<ApiException>().having((e) => e.message, 'message', contains(start.tripId))),
+    );
+
+    await api.endTrip(start.tripId);
+    expect(
+      () => api.startTripWithLegs(const []),
+      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'INVALID_REQUEST')),
+    );
+  });
 }

@@ -1,5 +1,6 @@
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
+import 'package:catch_my_ride/data/recent_routes_store.dart';
 import 'package:catch_my_ride/domain/journey.dart';
 import 'package:catch_my_ride/domain/models.dart';
 import 'package:catch_my_ride/ui/design/theme.dart';
@@ -35,19 +36,20 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('여정이 없으면 가운데 안내와 만들기 버튼을 보여준다', (tester) async {
-    // 놓치지마 탭 초기 화면과 같은 가운데 타이틀·서브타이틀·버튼 (디자인 통일 2026-09-16)
+  testWidgets('여정이 없으면 가운데 안내 — 바로 시작이 주 버튼, 저장은 보조', (tester) async {
+    // 놓치지마 탭 초기 화면과 같은 가운데 타이틀·서브타이틀·버튼 (디자인 통일 2026-09-16).
+    // 1회성이 기본 동선 (오너 화면 재구성 2026-09-21)
     await pumpPage(tester);
 
-    expect(find.text('놓치지 않는 하차,\n여정 만들기부터 시작해요'), findsOneWidget);
-    expect(find.text('출발지부터 환승·목적지까지 넣어두면\n내릴 타이밍을 알려드려요'), findsOneWidget);
-    expect(find.text('여정 만들기'), findsOneWidget);
+    expect(find.text('내릴 역, 놓치지 않게\n알려드릴게요'), findsOneWidget);
+    expect(find.text('바로 시작하기'), findsOneWidget);
+    expect(find.text('경로 생성하기'), findsOneWidget);
   });
 
-  testWidgets('여정 만들기를 누르면 생성 화면이 열린다', (tester) async {
+  testWidgets('경로 생성하기를 누르면 생성 화면이 열린다', (tester) async {
     await pumpPage(tester);
 
-    await tester.tap(find.text('여정 만들기'));
+    await tester.tap(find.text('경로 생성하기'));
     await tester.pumpAndSettle();
 
     expect(find.byType(JourneyCreatePage), findsOneWidget);
@@ -120,5 +122,75 @@ void main() {
 
     expect(find.byType(TripPage), findsOneWidget);
     expect(find.text('다음 역이에요!'), findsOneWidget);
+  });
+
+  testWidgets('바로 시작 — 구간만 받고, 저장 스위치를 켜면 이름·요일이 펼쳐진다', (tester) async {
+    // FR-708 — 저장은 입력 화면 안 스위치 하나 (오너 화면 재구성 2026-09-21)
+    await pumpPage(tester);
+    await tester.tap(find.text('바로 시작하기'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(JourneyCreatePage), findsOneWidget);
+    expect(find.text('어디까지 가세요?'), findsOneWidget);
+    expect(find.text('추적 시작'), findsOneWidget);
+    expect(find.text('경로 저장하기'), findsOneWidget);
+    expect(find.text('이름'), findsNothing);
+    expect(find.text('요일 반복 (선택)'), findsNothing);
+
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('이름'), findsOneWidget);
+    expect(find.text('요일 반복 (선택)'), findsOneWidget);
+    expect(find.text('저장하고 추적 시작'), findsOneWidget);
+
+    // 구간 없이 시작하면 저장 여정과 같은 검증 메시지
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('추적 시작'));
+    await tester.pump();
+    expect(find.text('구간을 1개 이상 추가해주세요'), findsOneWidget);
+  });
+
+  testWidgets('저장 안 한 1회성 길은 최근 간 길로 남고, 저장하면 여정 목록으로 올라간다', (tester) async {
+    // FR-708 → FR-702 전환 루프 — 최근 간 길 카드에서 원탭 저장
+    await RecentRoutesStore().push(_request.legs, now: DateTime.now());
+    await pumpPage(tester);
+
+    expect(find.text('최근 간 길'), findsOneWidget);
+    expect(find.text('여의도 → 당산'), findsOneWidget);
+    expect(find.text('다시 시작'), findsOneWidget);
+    expect(find.text('저장'), findsOneWidget);
+
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(find.text('경로를 저장할까요?'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '병원');
+    await tester.tap(find.text('저장').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('저장한 여정'), findsOneWidget);
+    expect(find.text('병원'), findsOneWidget);
+    expect(find.text('최근 간 길'), findsNothing);
+    expect(await RecentRoutesStore().list(), isEmpty);
+  });
+
+  testWidgets('여정 목록에서도 하차 알림 시작 영역이 맨 위, 진행 중 트립이 있으면 숨긴다', (tester) async {
+    await api.createJourney(_request);
+    await pumpPage(tester);
+    expect(find.text('하차 알림 시작하기'), findsOneWidget);
+    expect(find.text('저장한 여정'), findsOneWidget);
+    // 경로 생성은 가운데 FAB(아이콘 + 라벨) (오너 요청 2026-09-21)
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.text('경로 생성하기'), findsOneWidget);
+
+    await tester.tap(find.text('시작'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    // 트립 화면에서 뒤로 — 진행 중 트립 유지
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('이어보기'), findsOneWidget);
+    expect(find.text('하차 알림 시작하기'), findsNothing); // 동시 1개 규칙 (§9-2)
   });
 }

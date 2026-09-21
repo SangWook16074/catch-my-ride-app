@@ -32,6 +32,20 @@ class JourneyLeg {
 
   @override
   int get hashCode => Object.hash(line, boardStop, alightStop);
+
+  /// 로컬 보관(1회성 트립 legs 스냅숏)·서버 요청 공용 직렬화 — v1은 지하철만 (API.md §9)
+  Map<String, Object?> toJson() => {
+    'type': 'SUBWAY',
+    'line': line,
+    'boardStop': boardStop,
+    'alightStop': alightStop,
+  };
+
+  static JourneyLeg fromJson(Map<String, dynamic> json) => JourneyLeg(
+    line: json['line'] as String,
+    boardStop: json['boardStop'] as String,
+    alightStop: json['alightStop'] as String,
+  );
 }
 
 class Journey {
@@ -77,13 +91,19 @@ String? validateJourneyRequest(JourneyRequest request) {
   if (label.length > journeyLabelMaxLength) {
     return '여정 이름은 $journeyLabelMaxLength자 이내여야 해요';
   }
-  if (request.legs.isEmpty) {
+  return validateJourneyLegs(request.legs);
+}
+
+/// 구간만 검증 — 1회성 바로 시작(FR-708)은 라벨 없이 이 규칙만 통과하면 된다.
+/// 저장 여정(validateJourneyRequest)과 같은 규칙을 공유한다
+String? validateJourneyLegs(List<JourneyLeg> legs) {
+  if (legs.isEmpty) {
     return '구간을 1개 이상 추가해주세요';
   }
-  if (request.legs.length > maxJourneyLegs) {
+  if (legs.length > maxJourneyLegs) {
     return '구간은 최대 $maxJourneyLegs개까지 가능해요';
   }
-  for (final leg in request.legs) {
+  for (final leg in legs) {
     if (leg.line.trim().isEmpty ||
         leg.boardStop.trim().isEmpty ||
         leg.alightStop.trim().isEmpty) {
@@ -137,6 +157,71 @@ String? parseTripLink(Uri? uri) {
   }
   final tripId = uri.queryParameters['tripId'];
   return (tripId == null || tripId.isEmpty) ? null : tripId;
+}
+
+/// 최근 간 길 — 저장하지 않고 1회성으로 추적한 구간 (FR-708). 로컬에만 남겨 하차 알림 탭에서
+/// 원탭 재시작·나중에 저장으로 잇는다 (여정 목록·서버 히스토리는 오염시키지 않는다)
+class RecentRoute {
+  const RecentRoute({required this.legs, required this.lastUsedAt});
+
+  final List<JourneyLeg> legs;
+  final DateTime lastUsedAt;
+
+  Map<String, Object?> toJson() => {
+    'legs': [for (final leg in legs) leg.toJson()],
+    'lastUsedAt': lastUsedAt.toIso8601String(),
+  };
+
+  static RecentRoute fromJson(Map<String, dynamic> json) => RecentRoute(
+    legs: [
+      for (final item in json['legs'] as List<dynamic>)
+        JourneyLeg.fromJson(item as Map<String, dynamic>),
+    ],
+    lastUsedAt: DateTime.parse(json['lastUsedAt'] as String),
+  );
+}
+
+const int maxRecentRoutes = 5;
+
+/// 최근 간 길에 구간을 올린다 — 같은 구간은 하나로(최신 시각으로 맨 앞), 최대 [maxRecentRoutes]개
+List<RecentRoute> pushRecentRoute(
+  List<RecentRoute> routes,
+  List<JourneyLeg> legs,
+  DateTime now,
+) {
+  final legsList = List<JourneyLeg>.unmodifiable(legs);
+  return [
+    RecentRoute(legs: legsList, lastUsedAt: now),
+    for (final route in routes)
+      if (!sameLegs(route.legs, legsList)) route,
+  ].take(maxRecentRoutes).toList();
+}
+
+/// 구간 리스트가 같은 길인가 (순서 포함)
+bool sameLegs(List<JourneyLeg> a, List<JourneyLeg> b) {
+  if (a.length != b.length) {
+    return false;
+  }
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// 최근 간 길 카드의 날짜 표기 — "오늘" / "어제" / "9월 3일"
+String recentRouteDateLabel(DateTime usedAt, DateTime now) {
+  final used = DateTime(usedAt.year, usedAt.month, usedAt.day);
+  final today = DateTime(now.year, now.month, now.day);
+  final days = today.difference(used).inDays;
+  if (days <= 0) {
+    return '오늘';
+  }
+  if (days == 1) {
+    return '어제';
+  }
+  return '${usedAt.month}월 ${usedAt.day}일';
 }
 
 /// 트립 진행 상태 (API.md §9-3)

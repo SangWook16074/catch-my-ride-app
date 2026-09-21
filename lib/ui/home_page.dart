@@ -199,15 +199,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// (LOST 화면 "처음부터 다시 추적" 진입점)
   Future<void> _openTripLink(String tripId) async {
     final storedTripId = await _tripStore.read();
-    final journeyId = storedTripId == tripId
-        ? await _tripStore.readJourneyId()
-        : null;
+    final sameTrip = storedTripId == tripId;
+    final journeyId = sameTrip ? await _tripStore.readJourneyId() : null;
+    final legs = sameTrip ? await _tripStore.readLegs() : null;
     if (!mounted) {
       return;
     }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => TripPage(tripId: tripId, journeyId: journeyId),
+        builder: (_) =>
+            TripPage(tripId: tripId, journeyId: journeyId, legs: legs),
       ),
     );
   }
@@ -527,12 +528,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // 이미 진행 중 트립이 있음(§9-2 동시 1개) — 보관된 트립 이어보기로 유도
       final tripId = await _tripStore.read();
       final journeyId = await _tripStore.readJourneyId();
+      final legs = await _tripStore.readLegs();
       if (!mounted || tripId == null) {
         return;
       }
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => TripPage(tripId: tripId, journeyId: journeyId),
+          builder: (_) =>
+              TripPage(tripId: tripId, journeyId: journeyId, legs: legs),
         ),
       );
     } catch (_) {

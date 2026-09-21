@@ -614,6 +614,29 @@ class MockNochijimaApi implements NochijimaApi {
   }
 
   @override
+  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs) async {
+    // §9-2 1회성 트립 — 여정 검증 규칙 공유, 동시 1개, 여정 목록·lastUsedAt은 건드리지 않는다
+    final message = validateJourneyLegs(legs);
+    if (message != null) {
+      throw _invalid(message);
+    }
+    final active = _trip;
+    if (active != null) {
+      throw _invalid('진행 중인 트립이 있습니다: ${active.tripId}');
+    }
+    _trip = _MockTrip(
+      tripId: 'mock-trip-${_nextTripId++}',
+      journeyId: null,
+      legs: List.of(legs),
+      remainingStops: _mockLegStops,
+    );
+    return TripStart(
+      tripId: _trip!.tripId,
+      startedAt: DateTime.now().toIso8601String(),
+    );
+  }
+
+  @override
   Future<TripStatus> getTrip(String tripId) async {
     final trip = _trip;
     if (trip == null || trip.tripId != tripId) {
@@ -666,7 +689,9 @@ class _MockTrip {
   });
 
   final String tripId;
-  final String journeyId;
+
+  /// 1회성 트립(startTripWithLegs)은 null
+  final String? journeyId;
   final List<JourneyLeg> legs;
   int legIndex = 0;
   int remainingStops;

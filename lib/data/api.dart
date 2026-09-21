@@ -70,6 +70,10 @@ abstract interface class NochijimaApi {
   /// §9-2 — 트립 시작 (유저 수동, FR-703). 동시 트립 1개 — 초과는 400
   Future<TripStart> startTrip(String journeyId);
 
+  /// 여정 저장 없이 인라인 구간으로 1회성 트립 시작 — `POST /api/v1/trips` (API.md §9-2, FR-708).
+  /// 검증·동시 1개 규칙은 여정과 동일, 여정 히스토리에는 비귀속
+  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs);
+
   /// §9-3 — 트립 상태 (15~30초 폴링, FR-204 준용)
   Future<TripStatus> getTrip(String tripId);
 

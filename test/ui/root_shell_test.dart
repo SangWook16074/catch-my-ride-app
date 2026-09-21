@@ -70,7 +70,7 @@ void main() {
     await tester.tap(find.text('전체 보기').last);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('여정 만들기부터 시작해요'), findsOneWidget);
+    expect(find.textContaining('놓치지 않게'), findsOneWidget);
   });
 
   testWidgets('탭을 누르면 해당 화면으로 이동한다', (tester) async {
@@ -82,7 +82,7 @@ void main() {
 
     await tester.tap(navLabel('하차 알림'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('여정 만들기부터 시작해요'), findsOneWidget);
+    expect(find.textContaining('놓치지 않게'), findsOneWidget);
 
     // 출발 알림 = 라이브 뷰 본편 (경로 없음 = 온보딩 안내)
     await tester.tap(navLabel('출발 알림'));
