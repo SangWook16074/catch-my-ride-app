@@ -139,6 +139,43 @@ O/D 경로 탐색 자체를 제품화하지 않는다(명세서 §1.4 "지도 �
 - [ ] 🤖 측정: 1회성 시작 비율·완주율·완료 후 저장 전환율 — 저장 강제 완화가 리텐션을
       해치지 않는지(전략: 유저 기반 먼저, PRD §8) 확인 지표
 
+### 하차 알림 — 백그라운드 갱신: 서버 푸시로 잠금화면 표면 갱신 (오너 결정 2026-09-21, PM 세션)
+
+가치 가설: 하차 알림의 실사용 장면은 "지하철에서 폰을 잠그고 주머니에 넣는 것"인데, 지금 잠금화면
+표면(iOS Live Activity·Android 지속 알림)은 **앱이 살아 있는 동안 트립 폴링(`trip_page.dart`)이 밀어
+넣는 값만** 보여준다(CLAUDE.md 데이터 계약 절 v1 한계). 앱이 백그라운드로 내려가면 카운트다운이
+멈춰 마지막 값에 묶이고, 하차 푸시(FR-704)만 믿게 된다 — "언제 내려야"를 잠금화면에서 실시간으로
+보여주는 게 미니앱이 구조적으로 못 하는 2단계 킬러 차별화의 본질이라 여기서 끝을 봐야 한다.
+판정·갱신 주체는 계속 서버(PRD §3, NFR-04) — 클라이언트 백그라운드 폴링·위치 추적으로 풀지 않는다.
+후보 3개(홈 위젯·설정 이관·측정) 중 오너 선택 2026-09-21.
+
+- [ ] 🤖 명세서 FR-705 개정 + 결정 기록: "잠금화면 카운트다운은 앱 생존 여부와 무관하게 서버가 갱신한다
+      (Live Activity 원격 갱신·Android 데이터 메시지). 갱신 발송은 무음이며 FR-704의 알림 2회 상한과
+      별개로 센다" (2026-09-21)
+- [ ] 🤖 API.md §9 개정 — **잠금화면 표면 토큰 등록 계약**: `PUT /api/v1/trips/{tripId}/surface-token`
+      (body: `platform`(IOS_LIVE_ACTIVITY | ANDROID_FCM), `token`). iOS는 ActivityKit push token(활동마다
+      새로 발급·회전하므로 갱신 시 재등록), Android는 기존 §4-1 FCM 토큰 재사용이라 body 없이 플래그만.
+      트립 종료·자동 정리 시 함께 삭제. **API.md에 계약 추가 후 진행**
+- [ ] 🤖 서버: 트립 상태가 바뀔 때(remainingStops·phase·currentStop 변화, `TripTrackingScheduler.save` 지점)
+      표면 갱신 발송 — iOS는 FCM HTTP v1의 `apns.live_activity_token` + `apns-push-type: liveactivity`로
+      content-state(eventStop·remainingStops·phase·currentStop) 전송(기존 `FcmPushClient` 재사용, 별도 APNs
+      클라이언트 없이 — 지원 여부는 첫 실측에서 확정, 안 되면 APNs p8 직접 발송으로 전환), DONE·종료·
+      LOST 방치 정리 시 `event: end`. Android는 FCM **data 메시지**(알림 아님)로 같은 값 전송.
+      변화 없으면 발송 안 함 + 트립당 분당 상한(ActivityKit 예산·NFR-08) — 발송 로그 관측 가능하게
+      ("성공 응답 ≠ 실제 전달" 원칙, 2026-09-09 절)
+- [ ] 🤖 iOS: `LiveActivityBridge.swift`에서 `Activity.pushTokenUpdates`를 구독해 토큰을 Flutter로
+      올리고(기존 `catchmyride/live_activity` 채널에 콜백 추가 — CLAUDE.md 브리지 목록 갱신), 클라가 서버에
+      등록. `Info.plist` `NSSupportsLiveActivitiesFrequentUpdates` 검토. 표면은 표시만 — 계산 없음(하드 룰 3)
+- [ ] 🤖 Android: `FirebaseMessagingService`(네이티브, 푸시·백그라운드 브리지 — CLAUDE.md 하드 룰 3 허용
+      범위)에서 트립 data 메시지를 받아 `TripNotificationBridge`의 지속 알림을 갱신·종료. 앱이 죽어 있어도
+      동작해야 하므로 Dart 백그라운드 아이솔레이트 대신 네이티브에서 표시만 처리. 브리지 목록 등록
+- [ ] 🤖 클라: 트립 시작·환승 재개 직후 토큰 등록(실패 시 조용히 — 표면은 기존 폴링 갱신으로 강등, NFR-03),
+      앱 복귀 시 폴링 값과 서버 갱신 값이 충돌하지 않게 "최신 fetchedAt 우선" 규칙. 트립 종료 시 등록 해제
+- [ ] 🧑 APNs 인증 키(p8)를 Firebase 콘솔에 등록 — 3단계 잔여 항목과 동일(FCM → APNs 발송 자체의 선행
+      조건이자 Live Activity 원격 갱신의 전제). Xcode Push Notifications capability 확인
+- [ ] 🤖 측정: 표면 갱신 발송 수·전달 실패율, 잠금 상태에서의 카운트다운 정확도(실주행: 잠근 채 두 정거장
+      지나 화면이 맞는지) — 방면 판정 실측(2026-09-21)과 같은 주행에서 함께 확인
+
 ## 2026-09-20 — 미니앱 9/10~9/14 변경 이식 (동일 반영)
 
 미니앱 커밋 11826ac·616d4fe·437b21d의 규칙을 스토어판에 이식했다. 코드 번역이 아니라 규칙 이식.
