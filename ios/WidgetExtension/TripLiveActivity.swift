@@ -31,14 +31,23 @@ struct TripLiveActivityWidget: Widget {
             .foregroundStyle(brandGreen)
         }
         DynamicIslandExpandedRegion(.bottom) {
-          Text(statusLine(context.state))
-            .font(.subheadline)
+          VStack(alignment: .leading, spacing: 2) {
+            Text(statusLine(context.state))
+              .font(.subheadline)
+            if let current = currentLine(context.state) {
+              Text(current)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
         }
       } compactLeading: {
         Image(systemName: "tram.fill")
           .foregroundStyle(brandGreen)
       } compactTrailing: {
         Text(compactText(context.state))
+          .font(.caption2)
+          .lineLimit(1)
           .foregroundStyle(brandGreen)
       } minimal: {
         Image(systemName: "tram.fill")
@@ -60,6 +69,12 @@ private struct LockScreenView: View {
         Text(statusLine(context.state))
           .font(.headline)
           .foregroundStyle(.white)
+        // 열차 현재 위치 — 서버 목격 값만 (오너 요청 2026-09-21: 잠금화면에서 지금 어디쯤인지)
+        if let current = currentLine(context.state) {
+          Text(current)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
       }
       Spacer()
       Text(remainingText(context.state))
@@ -84,6 +99,13 @@ private func statusLine(_ state: TripActivityAttributes.ContentState) -> String 
   }
 }
 
+/// "현재 ○○ 부근" — 이동 중(추적·도착 직전)이고 위치를 알 때만, 종착·끊김 상태엔 생략 (NFR-03)
+private func currentLine(_ state: TripActivityAttributes.ContentState) -> String? {
+  guard state.phase == "TRACKING" || state.phase == "ARRIVING" else { return nil }
+  guard let current = state.currentStop, !current.isEmpty else { return nil }
+  return "현재 \(current) 부근"
+}
+
 private func remainingText(_ state: TripActivityAttributes.ContentState) -> String {
   switch state.phase {
   case "ARRIVING": return "다음 역"
@@ -95,13 +117,16 @@ private func remainingText(_ state: TripActivityAttributes.ContentState) -> Stri
   }
 }
 
+/// 축소 다이나믹 아일랜드는 폭이 좁다 — 남은 정거장이 우선, 아직 모르면 현재 위치 역명,
+/// 둘 다 모를 때만 "…" (오너 피드백 2026-09-22: 축소 상태에 아이콘과 점만 보인다)
 private func compactText(_ state: TripActivityAttributes.ContentState) -> String {
   switch state.phase {
   case "ARRIVING": return "곧"
   case "TRANSFER", "DONE": return "도착"
   case "LOST": return "—"
   default:
-    guard let remaining = state.remainingStops else { return "…" }
-    return "\(remaining)"
+    if let remaining = state.remainingStops { return "\(remaining)" }
+    if let current = state.currentStop, !current.isEmpty { return current }
+    return "…"
   }
 }

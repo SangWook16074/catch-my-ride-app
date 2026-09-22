@@ -33,6 +33,7 @@ final class LiveActivityBridge: NSObject {
         eventStop: args?["eventStop"] as? String ?? "",
         remainingStops: args?["remainingStops"] as? Int,
         phase: args?["phase"] as? String ?? "TRACKING",
+        currentStop: args?["currentStop"] as? String,
         result: result
       )
     case "end":
@@ -59,7 +60,7 @@ final class LiveActivityBridge: NSObject {
       }
       let attributes = TripActivityAttributes(journeyLabel: journeyLabel)
       let state = TripActivityAttributes.ContentState(
-        eventStop: "", remainingStops: nil, phase: "TRACKING"
+        eventStop: "", remainingStops: nil, phase: "TRACKING", currentStop: nil
       )
       do {
         _ = try Activity.request(attributes: attributes, contentState: state)
@@ -72,11 +73,12 @@ final class LiveActivityBridge: NSObject {
 
   @available(iOS 16.1, *)
   private static func update(
-    eventStop: String, remainingStops: Int?, phase: String, result: @escaping FlutterResult
+    eventStop: String, remainingStops: Int?, phase: String, currentStop: String?,
+    result: @escaping FlutterResult
   ) {
     Task {
       let state = TripActivityAttributes.ContentState(
-        eventStop: eventStop, remainingStops: remainingStops, phase: phase
+        eventStop: eventStop, remainingStops: remainingStops, phase: phase, currentStop: currentStop
       )
       for activity in Activity<TripActivityAttributes>.activities {
         await activity.update(using: state)

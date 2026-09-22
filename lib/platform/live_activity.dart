@@ -24,10 +24,12 @@ class LiveActivityBridge {
   Future<void> start(String journeyLabel, {required String tripId}) =>
       _invoke('start', {'journeyLabel': journeyLabel, 'tripId': tripId});
 
+  /// currentStop = 열차 현재 위치 역명(§9-3, 모르면 null) — 잠금화면에 "현재 ○○ 부근" (오너 요청 2026-09-21)
   Future<void> update(TripStatus status) => _invoke('update', {
     'eventStop': status.eventStop,
     'remainingStops': status.remainingStops,
     'phase': status.phase.wire,
+    'currentStop': status.currentStop,
   });
 
   Future<void> end() => _invoke('end', null);

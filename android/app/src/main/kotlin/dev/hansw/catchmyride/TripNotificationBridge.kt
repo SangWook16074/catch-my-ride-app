@@ -43,7 +43,12 @@ object TripNotificationBridge {
                         val eventStop = call.argument<String>("eventStop") ?: ""
                         val remaining = call.argument<Int>("remainingStops")
                         val phase = call.argument<String>("phase") ?: "TRACKING"
-                        show(context, title = statusLine(phase, eventStop, remaining), text = journeyLabel)
+                        val currentStop = call.argument<String>("currentStop")
+                        show(
+                            context,
+                            title = statusLine(phase, eventStop, remaining),
+                            text = currentLine(phase, currentStop) ?: journeyLabel,
+                        )
                         result.success(true)
                     }
                     "end" -> {
@@ -70,6 +75,13 @@ object TripNotificationBridge {
         }
     }
 
+    /** "현재 ○○ 부근 · 여정" — 이동 중이고 위치를 알 때만 (오너 요청 2026-09-21, NFR-03) */
+    private fun currentLine(phase: String, currentStop: String?): String? {
+        if (phase != "TRACKING" && phase != "ARRIVING") return null
+        if (currentStop.isNullOrBlank()) return null
+        return "현재 $currentStop 부근 · $journeyLabel"
+    }
+
     private fun show(context: Context, title: String, text: String) {
         val manager = manager(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -92,6 +104,8 @@ object TripNotificationBridge {
             .setSmallIcon(context.applicationInfo.icon)
             .setContentTitle(title)
             .setContentText(text)
+            // "현재 ○○ 부근 · 여정"이 한 줄에 안 들어가면 펼쳐서 전부 보이게
+            .setStyle(Notification.BigTextStyle().bigText(text))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)

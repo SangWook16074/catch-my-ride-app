@@ -15,6 +15,8 @@ struct TripActivityAttributes: ActivityAttributes {
     var remainingStops: Int?
     /// TRACKING / ARRIVING / TRANSFER / DONE / LOST
     var phase: String
+    /// 열차 현재 위치 역명 (API.md §9-3 currentStop) — 목격 값만, 모르면 nil (낡은 값·추정 금지)
+    var currentStop: String?
   }
 
   /// 여정 라벨 — 활동 시작 시 고정
