@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/active_trip.dart';
 import '../data/api.dart';
 import '../data/recent_routes_store.dart';
-import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
+import 'components/active_trip_card.dart';
 import 'components/ad_banner.dart';
 import 'components/center_message.dart';
 import 'components/fade_route.dart';
@@ -49,7 +50,6 @@ class JourneyPage extends StatefulWidget {
 }
 
 class _JourneyPageState extends State<JourneyPage> {
-  final TripStore _tripStore = TripStore();
   final RecentRoutesStore _recentStore = RecentRoutesStore();
   _JourneyPhase _phase = _JourneyPhase.loading;
   List<Journey> _journeys = [];
@@ -57,14 +57,30 @@ class _JourneyPageState extends State<JourneyPage> {
   /// 저장하지 않은 최근 간 길(1회성, FR-708) — 로컬 보관, 원탭 재시작·저장 진입점
   List<RecentRoute> _recent = const [];
 
-  /// 진행 중 트립(이어보기) — 로컬 보관 tripId를 서버 상태로 확인한다
-  String? _activeTripId;
-  TripStatus? _activeTrip;
+  /// 진행 중 트립은 전역 `activeTrip`이 들고 있다 — 메인 탭과 같은 값·같은 카드를 쓴다
+  /// (오너 요청 2026-09-22)
+
+  /// 구독 중인 전역 트립 컨트롤러 — 구독과 해제가 같은 인스턴스를 향하게 붙잡아 둔다
+  late final ActiveTripController _trip;
 
   @override
   void initState() {
     super.initState();
+    _trip = activeTrip;
+    _trip.addListener(_onTripChanged);
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _trip.removeListener(_onTripChanged);
+    super.dispose();
+  }
+
+  void _onTripChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -76,7 +92,7 @@ class _JourneyPageState extends State<JourneyPage> {
   }
 
   Future<void> _load() async {
-    unawaited(_checkActiveTrip());
+    unawaited(activeTrip.restore());
     unawaited(_loadRecent());
     try {
       final journeys = await api.listJourneys();
@@ -112,54 +128,17 @@ class _JourneyPageState extends State<JourneyPage> {
     }
   }
 
-  Future<void> _checkActiveTrip() async {
-    final tripId = await _tripStore.read();
-    if (tripId == null) {
-      if (mounted) {
-        setState(() {
-          _activeTripId = null;
-          _activeTrip = null;
-        });
-      }
-      return;
-    }
-    try {
-      final status = await api.getTrip(tripId);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _activeTripId = tripId;
-        _activeTrip = status;
-      });
-    } on ApiException catch (error) {
-      if (error.status == 404) {
-        // 서버에서 이미 정리된 트립 — 로컬 보관도 정리
-        unawaited(_tripStore.clear());
-        if (mounted) {
-          setState(() {
-            _activeTripId = null;
-            _activeTrip = null;
-          });
-        }
-      }
-    } catch (_) {
-      // 네트워크 실패 — 배너만 생략, 다음 갱신에 재시도
-    }
-  }
-
   Future<void> _openTrip(String tripId) async {
-    // 보관된 여정 id(또는 1회성 구간 스냅숏)가 있으면 같이 넘긴다 — LOST 화면
-    // "처음부터 다시 추적"·완료 후 저장 제안 진입점
-    final journeyId = await _tripStore.readJourneyId();
-    final legs = await _tripStore.readLegs();
-    if (!mounted) {
-      return;
-    }
+    // 여정 id·1회성 구간 스냅숏은 컨트롤러가 들고 있다 — LOST 화면 "처음부터 다시 추적"·
+    // 완료 후 저장 제안 진입점
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            TripPage(tripId: tripId, journeyId: journeyId, legs: legs),
+        builder: (_) => TripPage(
+          tripId: tripId,
+          journeyLabel: activeTrip.label,
+          journeyId: activeTrip.journeyId,
+          legs: activeTrip.isOneOff ? activeTrip.legs : null,
+        ),
       ),
     );
     unawaited(_load());
@@ -203,7 +182,13 @@ class _JourneyPageState extends State<JourneyPage> {
     HapticFeedback.mediumImpact();
     try {
       final start = await api.startTripWithLegs(route.legs);
-      unawaited(_tripStore.write(start.tripId, legs: route.legs));
+      unawaited(
+        activeTrip.begin(
+          tripId: start.tripId,
+          label: journeyPathSummary(route.legs),
+          legs: route.legs,
+        ),
+      );
       unawaited(_recentStore.push(route.legs));
       if (!mounted) {
         return;
@@ -249,8 +234,14 @@ class _JourneyPageState extends State<JourneyPage> {
     HapticFeedback.mediumImpact();
     try {
       final start = await api.startTrip(journey.id);
-      // 이어보기·메인 요약 카드용 로컬 보관 (서버에 활성 트립 조회가 없다 — §9)
-      unawaited(_tripStore.write(start.tripId, journeyId: journey.id));
+      // 이어보기·메인 요약 카드·잠금화면 표면을 한 번에 건다 (서버에 활성 트립 조회가 없다 — §9)
+      unawaited(
+        activeTrip.begin(
+          tripId: start.tripId,
+          label: journey.label,
+          journeyId: journey.id,
+        ),
+      );
       if (!mounted) {
         return;
       }
@@ -346,7 +337,7 @@ class _JourneyPageState extends State<JourneyPage> {
     if (_phase == _JourneyPhase.ready &&
         _journeys.isEmpty &&
         _recent.isEmpty &&
-        _activeTrip == null) {
+        !activeTrip.hasTrip) {
       return Scaffold(
         backgroundColor: context.colors.background,
         extendBodyBehindAppBar: true,
@@ -464,41 +455,23 @@ class _JourneyPageState extends State<JourneyPage> {
           ),
         ];
       case _JourneyPhase.ready:
-        final activeTrip = _activeTrip;
-        final activeTripId = _activeTripId;
+        final hasTrip = activeTrip.hasTrip;
         return [
-          if (activeTrip != null && activeTripId != null)
-            AppCard(
-              tone: AppCardTone.brand,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('진행 중인 트립이 있어요', style: AppTypo.heading),
-                  const SizedBox(height: AppSpace.xs),
-                  Text(
-                    _activeTripSummary(activeTrip),
-                    style: AppTypo.bodySm.copyWith(
-                      color: context.colors.inkMuted,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpace.md),
-                  AppButton(
-                    label: '이어보기',
-                    medium: true,
-                    block: true,
-                    onPressed: () => unawaited(_openTrip(activeTripId)),
-                  ),
-                ],
-              ),
+          // 메인 탭과 같은 카드 — 탭마다 다른 모양을 쓰지 않는다 (오너 요청 2026-09-22)
+          if (hasTrip)
+            ActiveTripCard(
+              status: activeTrip.status!,
+              leg: activeTrip.currentLeg,
+              onTap: () => unawaited(_openTrip(activeTrip.tripId!)),
             ),
           // 여정·최근 길 없음 + 진행 중 트립 없음은 build의 가운데 안내가 담당한다.
           // 시작 진입점이 맨 위의 영역(카드) — 진행 중 트립이 있으면 동시 1개 규칙(§9-2)에 걸리므로 숨긴다
-          if (activeTrip == null) _startCard(),
+          if (!hasTrip) _startCard(),
           if (_journeys.isNotEmpty) _sectionHeader('저장한 여정'),
           for (final journey in _journeys) _journeyCard(journey),
           // 저장 안 한 1회성 길 — 원탭 재시작·나중에 저장 (FR-708 → FR-702 전환 루프)
           if (_recent.isNotEmpty) _sectionHeader('최근 간 길'),
-          for (final route in _recent) _recentCard(route, activeTrip == null),
+          for (final route in _recent) _recentCard(route, !hasTrip),
           // 경로 생성은 build의 FAB가 담당한다
           // 광고는 여정 목록·만들기 버튼 아래 스크롤 끝 — 시작 동선을 가로막지 않고,
           // 화면에 고정해 따라다니지 않는다 (오너 결정 2026-09-19: 셸 하단 플로팅 폐기)
@@ -506,16 +479,6 @@ class _JourneyPageState extends State<JourneyPage> {
         ];
     }
   }
-
-  String _activeTripSummary(TripStatus status) => switch (status.phase) {
-    TripPhase.transfer => '${status.eventStop} 환승 대기 중이에요. 탑승하면 눌러주세요',
-    TripPhase.lost => '추적이 끊겼어요. 상태를 확인해주세요',
-    TripPhase.done => '목적지에 도착했어요. 트립을 마무리해주세요',
-    _ =>
-      status.remainingStops == null
-          ? '${status.eventStop}행 위치 확인 중'
-          : '${status.eventStop}까지 ${status.remainingStops}정거장',
-  };
 
   /// 새 길 바로 시작 영역 — 버튼 하나가 아니라 안내 문구를 가진 카드 (오너 요청 2026-09-21)
   Widget _startCard() {

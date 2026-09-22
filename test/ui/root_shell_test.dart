@@ -1,3 +1,4 @@
+import 'package:catch_my_ride/data/active_trip.dart';
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
 import 'package:catch_my_ride/ui/design/components/glass_nav_bar.dart';
@@ -11,6 +12,7 @@ void main() {
   Future<void> pumpShell(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
+    activeTrip = ActiveTripController();
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(Brightness.light),

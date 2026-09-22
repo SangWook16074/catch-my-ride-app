@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/active_trip.dart';
 import '../data/api.dart';
 import '../data/push_banner_store.dart';
 import '../data/push_registrar.dart';
@@ -207,8 +208,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            TripPage(tripId: tripId, journeyId: journeyId, legs: legs),
+        builder: (_) => TripPage(
+          tripId: tripId,
+          journeyLabel: sameTrip ? activeTrip.label : defaultTripLabel,
+          journeyId: journeyId,
+          legs: legs,
+        ),
       ),
     );
   }
@@ -511,7 +516,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     HapticFeedback.mediumImpact();
     try {
       final start = await api.startTrip(journey.id);
-      unawaited(_tripStore.write(start.tripId, journeyId: journey.id));
+      unawaited(
+        activeTrip.begin(
+          tripId: start.tripId,
+          label: journey.label,
+          journeyId: journey.id,
+        ),
+      );
       if (!mounted) {
         return;
       }

@@ -1,3 +1,4 @@
+import 'package:catch_my_ride/data/active_trip.dart';
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
 import 'package:catch_my_ride/data/recent_routes_store.dart';
@@ -5,6 +6,7 @@ import 'package:catch_my_ride/domain/journey.dart';
 import 'package:catch_my_ride/domain/models.dart';
 import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/journey_create_page.dart';
+import 'package:catch_my_ride/ui/components/route_strip.dart';
 import 'package:catch_my_ride/ui/journey_page.dart';
 import 'package:catch_my_ride/ui/trip_page.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +23,7 @@ const _request = JourneyRequest(
 
 void main() {
   setUp(() {
+    activeTrip = ActiveTripController();
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
   });
@@ -71,9 +74,11 @@ void main() {
     await pumpPage(tester);
 
     await tester.tap(find.text('시작'));
-    // 위치 확인 중 화면은 구간 스트립 애니메이션이 계속 돌아 pumpAndSettle이 끝나지 않는다
+    // 위치 확인 중 화면은 구간 스트립 애니메이션이 계속 돌아 pumpAndSettle이 끝나지 않는다.
+    // 첫 폴링과 구간 조회(여정 목록)가 나란히 돌아 각각 프레임이 필요하다
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
 
     // 첫 폴링 = 열차 특정 전 — 카운트는 몰라도 노선 목격 위치는 보여준다 (§9-3 2026-09-16 개정,
     // mock은 탑승역으로 대신한다)
@@ -102,7 +107,8 @@ void main() {
     expect(find.byType(TripPage), findsNothing);
   });
 
-  testWidgets('트립을 끝내지 않고 나오면 이어보기 카드가 보인다', (tester) async {
+  testWidgets('트립을 끝내지 않고 나오면 메인과 같은 진행 중 카드가 보인다', (tester) async {
+    // 오너 요청 2026-09-22 — 탭마다 다른 모양을 쓰지 않는다 (ActiveTripCard 공용)
     await api.createJourney(_request);
     await pumpPage(tester);
 
@@ -112,16 +118,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     await tester.pageBack();
-    await tester.pumpAndSettle(); // 목록 복귀 — 이어보기 확인 폴링으로 2정거장
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('진행 중인 트립이 있어요'), findsOneWidget);
-    expect(find.text('당산까지 2정거장'), findsOneWidget);
+    // 메인 탭과 같은 카드 — 제목·구간 스트립 (별도 "이어보기" 버튼 없이 카드가 진입점)
+    expect(find.text('하차 알림 진행 중'), findsOneWidget);
+    expect(find.byType(RouteStrip), findsOneWidget);
+    expect(find.text('이어보기'), findsNothing);
 
-    await tester.tap(find.text('이어보기'));
-    await tester.pumpAndSettle(); // 다음 폴링 — 직전 역(ARRIVING)
+    // 카드를 탭하면 이어보기 — 별도 버튼 없이 카드 전체가 진입점
+    await tester.tap(find.text('하차 알림 진행 중'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byType(TripPage), findsOneWidget);
-    expect(find.text('다음 역이에요!'), findsOneWidget);
   });
 
   testWidgets('바로 시작 — 구간만 받고, 저장 스위치를 켜면 이름·요일이 펼쳐진다', (tester) async {
@@ -190,7 +200,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    expect(find.text('이어보기'), findsOneWidget);
+    expect(find.text('하차 알림 진행 중'), findsOneWidget);
     expect(find.text('하차 알림 시작하기'), findsNothing); // 동시 1개 규칙 (§9-2)
   });
 }

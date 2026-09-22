@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/api.dart';
-import '../data/trip_store.dart';
+import '../data/active_trip.dart';
 import '../domain/commute_report.dart';
 import '../domain/journey.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
 import 'components/ad_banner.dart';
-import 'components/route_strip.dart';
+import 'components/active_trip_card.dart';
 import 'components/commute_grass.dart';
 import 'components/fade_route.dart';
 import 'components/tab_header.dart';
@@ -57,7 +57,6 @@ enum _SummaryPhase { loading, empty, ready, failed }
 enum _SectionPhase { loading, unavailable, failed, ready }
 
 class _MainPageState extends State<MainPage> {
-  final TripStore _tripStore = TripStore();
   _SummaryPhase _phase = _SummaryPhase.loading;
   CommuteRoute? _route;
   ArrivalsResponse? _response;
@@ -70,14 +69,30 @@ class _MainPageState extends State<MainPage> {
   _SectionPhase _reportPhase = _SectionPhase.loading;
   List<FeedbackEntry> _feedback = [];
 
-  /// 진행 중 트립(하차 알림) 요약 — 로컬 보관 tripId를 서버 상태로 확인
-  String? _tripId;
-  TripStatus? _trip;
+  /// 진행 중 트립(하차 알림) 요약은 전역 `activeTrip`이 들고 있다 — 이 화면은 구독만 한다
+  /// (오너 피드백 2026-09-22: 화면마다 따로 조회해 한쪽이 낡은 상태에 묶였다)
+
+  /// 구독 중인 전역 트립 컨트롤러 — 구독과 해제가 같은 인스턴스를 향하게 붙잡아 둔다
+  late final ActiveTripController _trip;
 
   @override
   void initState() {
     super.initState();
+    _trip = activeTrip;
+    _trip.addListener(_onTripChanged);
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _trip.removeListener(_onTripChanged);
+    super.dispose();
+  }
+
+  void _onTripChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -90,7 +105,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _load() async {
-    unawaited(_checkTrip());
+    unawaited(activeTrip.restore());
     unawaited(_loadJourneys());
     unawaited(_loadFeedback());
     try {
@@ -151,12 +166,6 @@ class _MainPageState extends State<MainPage> {
         _journeys = journeys;
         _journeyPhase = _SectionPhase.ready;
       });
-      if (_trip != null && _tripLegs == null) {
-        final legs = await _resolveTripLegs();
-        if (mounted && legs != null) {
-          setState(() => _tripLegs = legs);
-        }
-      }
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -213,70 +222,20 @@ class _MainPageState extends State<MainPage> {
     widget.onOpenJourney();
   }
 
-  /// 진행 중 트립의 구간 — 카드 구간 스트립용. 1회성은 로컬 스냅숏, 저장 여정은 목록에서 찾는다
-  List<JourneyLeg>? _tripLegs;
-
-  /// 저장 여정 트립은 목록(_journeys)이 늦게 오면 못 찾는다 — 트립 확인·여정 로드 양쪽 끝에서 다시 푼다
-  Future<List<JourneyLeg>?> _resolveTripLegs() async {
-    final journeyId = await _tripStore.readJourneyId();
-    if (journeyId == null) {
-      return _tripStore.readLegs();
-    }
-    return _journeys.where((j) => j.id == journeyId).firstOrNull?.legs;
-  }
-
-  Future<void> _checkTrip() async {
-    final tripId = await _tripStore.read();
-    if (tripId == null) {
-      if (mounted) {
-        setState(() {
-          _tripId = null;
-          _trip = null;
-          _tripLegs = null;
-        });
-      }
-      return;
-    }
-    try {
-      final status = await api.getTrip(tripId);
-      final legs = await _resolveTripLegs();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _tripId = tripId;
-        _trip = status;
-        _tripLegs = legs;
-      });
-    } on ApiException catch (error) {
-      if (error.status == 404) {
-        // 서버에서 정리된 트립 — 로컬 보관도 정리
-        unawaited(_tripStore.clear());
-        if (mounted) {
-          setState(() {
-            _tripId = null;
-            _trip = null;
-          });
-        }
-      }
-    } catch (_) {
-      // 네트워크 실패 — 카드만 생략
-    }
-  }
-
   Future<void> _openTrip(String tripId) async {
     HapticFeedback.selectionClick();
-    // 보관된 여정 id(또는 1회성 구간 스냅숏)가 있으면 같이 넘긴다 — LOST 화면
-    // "처음부터 다시 추적"·완료 후 저장 제안 진입점
-    final journeyId = await _tripStore.readJourneyId();
-    final legs = await _tripStore.readLegs();
-    if (!mounted) {
-      return;
-    }
+    // 여정 id·1회성 구간 스냅숏은 컨트롤러가 들고 있다 — LOST 화면 "처음부터 다시 추적"·
+    // 완료 후 저장 제안 진입점
+    final journeyId = activeTrip.journeyId;
+    final legs = activeTrip.isOneOff ? activeTrip.legs : null;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            TripPage(tripId: tripId, journeyId: journeyId, legs: legs),
+        builder: (_) => TripPage(
+          tripId: tripId,
+          journeyLabel: activeTrip.label,
+          journeyId: journeyId,
+          legs: legs,
+        ),
       ),
     );
     unawaited(_load());
@@ -299,8 +258,14 @@ class _MainPageState extends State<MainPage> {
     HapticFeedback.mediumImpact();
     try {
       final start = await api.startTrip(journey.id);
-      // 이어보기·요약 카드용 로컬 보관 (서버에 활성 트립 조회가 없다 — §9)
-      unawaited(_tripStore.write(start.tripId, journeyId: journey.id));
+      // 이어보기·요약 카드·잠금화면 표면을 한 번에 건다 (서버에 활성 트립 조회가 없다 — §9)
+      unawaited(
+        activeTrip.begin(
+          tripId: start.tripId,
+          label: journey.label,
+          journeyId: journey.id,
+        ),
+      );
       if (!mounted) {
         return;
       }
@@ -370,53 +335,11 @@ class _MainPageState extends State<MainPage> {
             _sectionHeader('출발 알림', _openCatch),
             GestureDetector(onTap: _openCatch, child: _summaryCard()),
             _sectionHeader('하차 알림', _openJourneyTab),
-            if (_trip != null && _tripId != null)
-              GestureDetector(
-                onTap: () => unawaited(_openTrip(_tripId!)),
-                // 다른 섹션의 데이터 카드와 같은 기본 톤 — 진행 중이라고 카드 전체를 브랜드색으로
-                // 칠하지 않는다 (오너 피드백 2026-09-21: 하차 알림만 색이 달라 보였다)
-                child: AppCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '하차 알림 진행 중',
-                                  style: AppTypo.caption.copyWith(
-                                    color: context.colors.primaryStrong,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: AppSpace.xs),
-                                Text(_tripSummary(_trip!), style: AppTypo.heading),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            size: 20,
-                            color: context.colors.inkSubtle,
-                          ),
-                        ],
-                      ),
-                      // 트립 화면과 같은 구간 스트립 애니메이션 (오너 요청 2026-09-21) —
-                      // 이동 중 구간(추적·도착 직전)에만, 구간을 알 때만
-                      if (_tripStripLeg() case final leg?) ...[
-                        const SizedBox(height: AppSpace.lg),
-                        RouteStrip(
-                          boardStop: leg.boardStop,
-                          eventStop: leg.alightStop,
-                          line: leg.line,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+            if (activeTrip.hasTrip)
+              ActiveTripCard(
+                status: activeTrip.status!,
+                leg: activeTrip.currentLeg,
+                onTap: () => unawaited(_openTrip(activeTrip.tripId!)),
               )
             else
               _journeyEntryCard(),
@@ -469,16 +392,6 @@ class _MainPageState extends State<MainPage> {
       ),
     );
   }
-
-  String _tripSummary(TripStatus status) => switch (status.phase) {
-    TripPhase.transfer => '${status.eventStop} 환승 대기 중',
-    TripPhase.lost => '추적이 끊겼어요',
-    TripPhase.done => '목적지 도착',
-    _ =>
-      status.remainingStops == null
-          ? '${status.eventStop}행 위치 확인 중'
-          : '${status.eventStop}까지 ${status.remainingStops}정거장',
-  };
 
   Widget _summaryCard() {
     switch (_phase) {
@@ -598,22 +511,6 @@ class _MainPageState extends State<MainPage> {
         ],
       ),
     );
-  }
-
-  /// 진행 중 트립 카드에 스트립을 그릴 구간 — 추적·도착 직전 상태에서 현재 구간, 그 외 null
-  JourneyLeg? _tripStripLeg() {
-    final trip = _trip;
-    final legs = _tripLegs;
-    if (trip == null || legs == null) {
-      return null;
-    }
-    if (trip.phase != TripPhase.tracking && trip.phase != TripPhase.arriving) {
-      return null;
-    }
-    if (trip.legIndex < 0 || trip.legIndex >= legs.length) {
-      return null;
-    }
-    return legs[trip.legIndex];
   }
 
   // 메인의 카드는 전부 기본 톤 — 빈 상태(여정·경로·기록 없음)도 브랜드색으로 칠하지 않는다

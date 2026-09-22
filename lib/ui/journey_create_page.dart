@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/active_trip.dart';
 import '../data/api.dart';
 import '../data/recent_routes_store.dart';
-import '../data/trip_store.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
 import 'design/components/button.dart';
@@ -174,7 +174,13 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
       if (_saveToo) {
         final journey = await api.createJourney(_request());
         final start = await api.startTrip(journey.id);
-        unawaited(TripStore().write(start.tripId, journeyId: journey.id));
+        unawaited(
+          activeTrip.begin(
+            tripId: start.tripId,
+            label: journey.label,
+            journeyId: journey.id,
+          ),
+        );
         result = JourneyTripStarted(
           tripId: start.tripId,
           legs: legs,
@@ -183,7 +189,13 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
         );
       } else {
         final start = await api.startTripWithLegs(legs);
-        unawaited(TripStore().write(start.tripId, legs: legs));
+        unawaited(
+          activeTrip.begin(
+            tripId: start.tripId,
+            label: journeyPathSummary(legs),
+            legs: legs,
+          ),
+        );
         unawaited(RecentRoutesStore().push(legs));
         result = JourneyTripStarted(tripId: start.tripId, legs: legs);
       }

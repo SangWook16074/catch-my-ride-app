@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import '../data/active_trip.dart';
 import '../data/api.dart';
-import '../data/trip_store.dart';
 import '../domain/journey.dart';
-import '../platform/live_activity.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
 import '../data/recent_routes_store.dart';
@@ -17,9 +16,6 @@ import 'components/save_journey_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/sheet.dart';
 import 'design/tokens.dart';
-
-/// 트립 폴링 주기 — FR-204 준용(15~30초). 하차 판정·푸시는 서버 몫, 화면은 표시만
-const Duration _pollInterval = Duration(seconds: 20);
 
 /// 진행 중 트립 화면 (FR-705) — 남은 정거장 카운트다운, 환승 수동 재개(FR-703).
 class TripPage extends StatefulWidget {
@@ -47,116 +43,67 @@ class TripPage extends StatefulWidget {
   State<TripPage> createState() => _TripPageState();
 }
 
-class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
-  final TripStore _tripStore = TripStore();
-  final LiveActivityBridge _liveActivity = LiveActivityBridge();
-  TripStatus? _status;
-
-  /// 이 트립의 구간 — "위치 확인 중" 화면에 구간(탑승역→하차역)을 그리기 위한 표시 보강.
-  /// 1회성 트립은 스냅숏, 저장 여정 트립은 여정 조회로 채운다. 푸시 딥링크 진입·조회 실패면
-  /// null — 문구만으로 동작한다
-  List<JourneyLeg>? _legs;
-  bool _stale = false;
-  bool _gone = false;
+class _TripPageState extends State<TripPage> {
+  /// 상태·폴링·잠금화면 표면은 전역 `activeTrip`이 들고 있다 — 이 화면은 구독만 한다.
+  /// (오너 피드백 2026-09-22: 화면마다 따로 폴링해서 탭 카드가 낡은 값에 묶였다)
   bool _restarting = false;
 
   /// 1회성 트립을 완료 후 여정으로 저장했으면 그 라벨 — 저장 버튼을 안내로 바꾼다 (FR-708)
   String? _savedLabel;
-  Timer? _timer;
+
+  /// 단계 전환 햅틱을 1회만 울리기 위한 직전 단계
+  TripPhase? _lastPhase;
+
+  TripStatus? get _status => activeTrip.status;
+  List<JourneyLeg>? get _legs => activeTrip.legs;
+  bool get _stale => activeTrip.stale;
+  bool get _gone => activeTrip.gone;
+
+  /// 구독 중인 전역 트립 컨트롤러 — 구독과 해제가 같은 인스턴스를 향하게 붙잡아 둔다
+  late final ActiveTripController _trip;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    // 잠금화면 표면 시작 (FR-705) — iOS Live Activity / Android 지속 알림, 미지원은 조용히 무시
-    unawaited(_liveActivity.start(widget.journeyLabel, tripId: widget.tripId));
-    _legs = widget.legs;
-    unawaited(_loadJourney());
-    unawaited(_refresh());
-    _timer = Timer.periodic(_pollInterval, (_) => unawaited(_refresh()));
-  }
-
-  Future<void> _loadJourney() async {
-    final journeyId = widget.journeyId;
-    if (journeyId == null) {
-      return;
-    }
-    try {
-      final journeys = await api.listJourneys();
-      if (!mounted) {
-        return;
-      }
-      for (final journey in journeys) {
-        if (journey.id == journeyId) {
-          setState(() => _legs = journey.legs);
-          return;
-        }
-      }
-    } catch (_) {
-      // 표시 보강용 — 실패는 조용히 무시, 트립 추적에는 영향 없음
-    }
+    _trip = activeTrip;
+    _trip.addListener(_onTripChanged);
+    _lastPhase = activeTrip.status?.phase;
+    // 이어보기·푸시 딥링크로 들어왔을 수도 있다 — 컨트롤러가 이 트립을 추적하게 한다
+    unawaited(
+      activeTrip.adopt(
+        tripId: widget.tripId,
+        label: widget.journeyLabel,
+        journeyId: widget.journeyId,
+        legs: widget.legs,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    // 폴링은 멈추지 않는다 — 화면을 닫아도 탭 카드·잠금화면은 계속 갱신돼야 한다
+    _trip.removeListener(_onTripChanged);
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 잠금·백그라운드 동안 타이머가 멈춘다 — 돌아오면 다음 틱을 기다리지 않고 즉시 갱신
-    // (2026-09-15 실주행 피드백: 지하철에서 폰을 껐다 켜면 화면이 낡아 보였다)
-    if (state == AppLifecycleState.resumed) {
-      unawaited(_refresh());
-    }
-  }
-
-  Future<void> _refresh() async {
-    // 종착 상태면 더 묻지 않는다 (mock은 폴링마다 전진하므로 화면 상태 고정에도 필요)
-    final phase = _status?.phase;
-    if (_gone || phase == TripPhase.done || phase == TripPhase.transfer) {
+  void _onTripChanged() {
+    if (!mounted) {
       return;
     }
-    try {
-      final status = await api.getTrip(widget.tripId);
-      if (!mounted) {
-        return;
-      }
-      // 화면을 보는 중에도 내릴 타이밍을 몸으로 알린다 — 도착 직전·환승·완료로
-      // 넘어가는 순간 1회 (2026-09-19 실주행: 푸시만으로는 환승을 놓치기 쉽다)
-      final previousPhase = _status?.phase;
-      if (previousPhase != null &&
-          previousPhase != status.phase &&
-          (status.phase == TripPhase.arriving ||
-              status.phase == TripPhase.transfer ||
-              status.phase == TripPhase.done)) {
-        HapticFeedback.heavyImpact();
-      }
-      unawaited(_liveActivity.update(status)); // 잠금화면 카운트다운 갱신 (FR-705)
-      setState(() {
-        _status = status;
-        _stale = false;
-      });
-    } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      if (error.status == 404) {
-        // 트립이 서버에서 정리됨 — 종료 안내로 강등, 이어보기·잠금화면도 정리
-        unawaited(_tripStore.clear());
-        unawaited(_liveActivity.end());
-        setState(() => _gone = true);
-        return;
-      }
-      setState(() => _stale = true);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() => _stale = true);
+    // 화면을 보는 중에도 내릴 타이밍을 몸으로 알린다 — 도착 직전·환승·완료로
+    // 넘어가는 순간 1회 (2026-09-19 실주행: 푸시만으로는 환승을 놓치기 쉽다)
+    final phase = activeTrip.status?.phase;
+    final previous = _lastPhase;
+    if (phase != null &&
+        previous != null &&
+        previous != phase &&
+        (phase == TripPhase.arriving ||
+            phase == TripPhase.transfer ||
+            phase == TripPhase.done)) {
+      HapticFeedback.heavyImpact();
     }
+    _lastPhase = phase;
+    setState(() {});
   }
 
   Future<void> _advanceLeg() async {
@@ -164,18 +111,9 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
     HapticFeedback.mediumImpact();
     try {
       final status = await api.advanceTripLeg(widget.tripId);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _status = status;
-        _stale = false;
-      });
+      activeTrip.apply(status);
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() => _stale = true);
+      unawaited(activeTrip.refresh());
     }
   }
 
@@ -205,13 +143,19 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
       final TripStart start;
       if (journeyId != null) {
         start = await api.startTrip(journeyId);
-        unawaited(_tripStore.write(start.tripId, journeyId: journeyId));
       } else {
         start = await api.startTripWithLegs(legs!);
-        unawaited(_tripStore.write(start.tripId, legs: legs));
         unawaited(RecentRoutesStore().push(legs));
       }
-      unawaited(_liveActivity.end());
+      // 새 트립으로 갈아탄다 — 보관·잠금화면 표면·폴링을 컨트롤러가 다시 건다
+      unawaited(
+        activeTrip.begin(
+          tripId: start.tripId,
+          label: widget.journeyLabel,
+          journeyId: journeyId,
+          legs: journeyId == null ? legs : null,
+        ),
+      );
       if (!mounted) {
         return;
       }
@@ -299,13 +243,8 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
   }
 
   Future<void> _end() async {
-    unawaited(_tripStore.clear());
-    unawaited(_liveActivity.end());
-    try {
-      await api.endTrip(widget.tripId);
-    } catch (_) {
-      // 종료 실패해도 화면은 닫는다 — 서버가 자동 정리한다 (§9-3)
-    }
+    // 종료는 멱등(§9-3) — 실패해도 로컬·표면은 정리되고 화면은 닫는다
+    unawaited(activeTrip.finish());
     if (mounted) {
       Navigator.of(context).pop();
     }
@@ -368,7 +307,13 @@ class _TripPageState extends State<TripPage> with WidgetsBindingObserver {
       return _message(
         title: '트립이 종료됐어요',
         subtitle: '이미 끝났거나 서버에서 정리된 트립이에요',
-        button: AppButton(label: '돌아가기', onPressed: () => Navigator.of(context).pop()),
+        button: AppButton(
+          label: '돌아가기',
+          onPressed: () {
+            activeTrip.clearGone();
+            Navigator.of(context).pop();
+          },
+        ),
       );
     }
     final status = _status;

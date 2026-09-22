@@ -1,3 +1,4 @@
+import 'package:catch_my_ride/data/active_trip.dart';
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
 import 'package:catch_my_ride/domain/journey.dart';
@@ -47,8 +48,12 @@ Future<void> _pumpTripPage(
   String? journeyId,
   List<JourneyLeg>? legs,
 }) async {
+  // 앞 화면의 구독을 먼저 끊는다 — 구독이 사라지면 전역 폴링도 멈춘다
+  await tester.pumpWidget(const SizedBox());
   SharedPreferences.setMockInitialValues({});
   api = _FixedTripApi(status);
+  // 전역 트립 상태는 테스트마다 새로 — 앞 테스트의 트립을 물려받지 않는다
+  activeTrip = ActiveTripController();
   await tester.pumpWidget(
     MaterialApp(
       theme: buildAppTheme(Brightness.light),

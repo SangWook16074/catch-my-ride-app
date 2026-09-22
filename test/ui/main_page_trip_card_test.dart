@@ -1,3 +1,4 @@
+import 'package:catch_my_ride/data/active_trip.dart';
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
 import 'package:catch_my_ride/data/trip_store.dart';
@@ -23,6 +24,7 @@ void main() {
     tester,
   ) async {
     api = MockNochijimaApi();
+    activeTrip = ActiveTripController();
     final journey = await api.createJourney(_request);
     final start = await api.startTrip(journey.id);
     // 트립 시작 시 로컬 보관되는 값과 동일한 상태를 만든다
@@ -49,7 +51,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('하차 알림 진행 중'), findsOneWidget);
-    expect(find.text('당산행 위치 확인 중'), findsOneWidget);
+    // 특정 전이라도 노선에서 목격되면 위치를 보여준다 (§9-3, mock은 탑승역으로 대신한다)
+    expect(find.text('현재 여의도 부근'), findsOneWidget);
     // 트립 화면과 같은 구간 스트립 (오너 요청 2026-09-21)
     expect(find.byType(RouteStrip), findsOneWidget);
     expect(find.text('여의도'), findsOneWidget);
@@ -57,9 +60,16 @@ void main() {
 
     await tester.tap(find.text('하차 알림 진행 중'));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1)); // 트립 화면 폴링 — 2정거장
+    await tester.pump(const Duration(milliseconds: 500));
 
+    // 화면을 여는 것만으로 다시 묻지 않는다 — 전역 폴링이 들고 있던 값을 그대로 이어받는다
+    // (오너 피드백 2026-09-22: 상태를 한 곳에서 관리)
     expect(find.byType(TripPage), findsOneWidget);
+    expect(find.text('당산에서 내려요'), findsOneWidget);
+    expect(find.text('현재 여의도 부근'), findsOneWidget);
+
+    // 다음 폴링에서 열차가 특정된다
+    await tester.pump(const Duration(seconds: 20));
     expect(find.text('2정거장 남았어요'), findsOneWidget);
   });
 }

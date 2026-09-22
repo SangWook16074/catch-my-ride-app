@@ -88,11 +88,16 @@ lib/
 
 - 공유 저장소: iOS App Group `group.dev.hansw.catchmyride` (가칭) / Android SharedPreferences.
 - Flutter가 쓰고 위젯이 읽는 값: 다음 도착 노선·분, 권장 출발 시각, 경로 라벨. 위젯 쪽 계산 금지.
+- **진행 중 트립 상태는 전역 하나** — `lib/data/active_trip.dart`(`activeTrip`)가 tripId·상태·구간·
+  라벨을 들고 20초 폴링하며, 메인 탭 카드·하차 알림 탭 카드(`lib/ui/components/active_trip_card.dart`
+  공용)·트립 화면이 **구독만** 한다. 화면마다 따로 조회하지 않는다 (오너 피드백 2026-09-22:
+  한쪽은 특정이 끝났는데도 "위치 확인 중"에 묶여 있었다). 폴링은 구독자가 있을 때만 돌고,
+  잠금화면 표면 갱신도 이 컨트롤러 한 곳에서 낸다 — 트립 화면을 닫아도 카드·표면이 계속 갱신된다.
 - **하차 알림 트립 잠금화면 표면** — iOS는 Live Activity(`ios/WidgetExtension/`, iOS 16.1+,
   App Group 없이 ActivityKit update 공급, 계약은 `ios/Runner/TripActivityAttributes.swift`),
   Android는 지속(ongoing) 무음 알림(`TripNotificationBridge.kt`, 탭 = `catchmyride://trip`
-  딥링크). 두 쪽 다 같은 값(eventStop·remainingStops(null=위치 확인 중)·phase)을 같은 채널로
-  받고, 갱신 주체는 Flutter 트립 폴링(`lib/ui/trip_page.dart`) — 표면은 표시만.
+  딥링크). 두 쪽 다 같은 값(eventStop·remainingStops(null=위치 확인 중)·phase·currentStop(열차 현재 위치 역명, 모르면 null — 2026-09-21 추가))을 같은 채널로
+  받고, 갱신 주체는 전역 트립 폴링(`lib/data/active_trip.dart`) — 표면은 표시만.
   v1 한계: 앱이 살아 있는 동안만 갱신되며, 서버 푸시 갱신은 후속 작업.
 - 필드를 바꾸면 이 절과 Extension 코드를 같은 커밋에서 갱신한다.
 

@@ -1,3 +1,4 @@
+import 'package:catch_my_ride/data/active_trip.dart';
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
 import 'package:catch_my_ride/domain/journey.dart';
@@ -34,6 +35,7 @@ Future<void> pumpMain(WidgetTester tester, {VoidCallback? onOpenJourney}) async 
 
 void main() {
   setUp(() {
+    activeTrip = ActiveTripController();
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi();
   });

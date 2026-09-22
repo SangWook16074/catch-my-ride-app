@@ -1,3 +1,4 @@
+import 'package:catch_my_ride/data/active_trip.dart';
 import 'package:catch_my_ride/data/api.dart';
 import 'package:catch_my_ride/data/mock_api.dart';
 import 'package:catch_my_ride/domain/journey.dart';
@@ -37,6 +38,7 @@ Future<void> seedRoute() {
 
 void main() {
   setUp(() {
+    activeTrip = ActiveTripController();
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
   });
