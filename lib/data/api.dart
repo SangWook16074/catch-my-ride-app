@@ -67,18 +67,21 @@ abstract interface class NochijimaApi {
 
   Future<void> deleteJourney(String id);
 
-  /// §9-2 — 트립 시작 (유저 수동, FR-703). 동시 트립 1개 — 초과는 400
-  Future<TripStart> startTrip(String journeyId);
+  /// §9-2 — 트립 시작 (유저 수동, FR-703). 동시 트립 1개 — 초과는 400.
+  /// [at]은 시작 시점 유저 위치(선택) — 출발지를 이미 지나 탄 상태로 시작했을 때 서버가
+  /// 뒤차 대신 **타고 있는 열차**를 잡는 근거 (2026-09-24). 없으면 서버가 기존 동작으로 강등
+  Future<TripStart> startTrip(String journeyId, {TripFix? at});
 
   /// 여정 저장 없이 인라인 구간으로 1회성 트립 시작 — `POST /api/v1/trips` (API.md §9-2, FR-708).
   /// 검증·동시 1개 규칙은 여정과 동일, 여정 히스토리에는 비귀속
-  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs);
+  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs, {TripFix? at});
 
   /// §9-3 — 트립 상태 (15~30초 폴링, FR-204 준용)
   Future<TripStatus> getTrip(String tripId);
 
-  /// §9-3 — 환승 후 다음 구간 수동 재개. TRANSFER가 아니면 400
-  Future<TripStatus> advanceTripLeg(String tripId);
+  /// §9-3 — 환승 후 다음 구간 수동 재개. TRANSFER가 아니면 400.
+  /// [at]은 startTrip과 같은 이유 — 환승 후 늦게 눌러도 탄 열차를 잡는다
+  Future<TripStatus> advanceTripLeg(String tripId, {TripFix? at});
 
   /// §9-3 — 트립 종료 (완료·취소 공용, 멱등)
   Future<void> endTrip(String tripId);

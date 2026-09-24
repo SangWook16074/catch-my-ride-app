@@ -282,9 +282,10 @@ class HttpNochijimaApi implements NochijimaApi {
   Future<void> deleteJourney(String id) => _send('DELETE', '/api/v1/journeys/$id');
 
   @override
-  Future<TripStart> startTrip(String journeyId) async {
-    final json = await _send('POST', '/api/v1/journeys/$journeyId/trips')
-        as Map<String, dynamic>;
+  Future<TripStart> startTrip(String journeyId, {TripFix? at}) async {
+    final json =
+        await _send('POST', '/api/v1/journeys/$journeyId/trips', _fixBody(at))
+            as Map<String, dynamic>;
     return TripStart(
       tripId: json['tripId'] as String,
       startedAt: json['startedAt'] as String,
@@ -292,10 +293,11 @@ class HttpNochijimaApi implements NochijimaApi {
   }
 
   @override
-  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs) async {
+  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs, {TripFix? at}) async {
     final json =
         await _send('POST', '/api/v1/trips', {
               'legs': [for (final leg in legs) leg.toJson()],
+              ...?_fixBody(at),
             })
             as Map<String, dynamic>;
     return TripStart(
@@ -309,9 +311,15 @@ class HttpNochijimaApi implements NochijimaApi {
       _tripStatusFromJson(await _get('/api/v1/trips/$tripId') as Map<String, dynamic>);
 
   @override
-  Future<TripStatus> advanceTripLeg(String tripId) async => _tripStatusFromJson(
-    await _send('POST', '/api/v1/trips/$tripId/next-leg') as Map<String, dynamic>,
-  );
+  Future<TripStatus> advanceTripLeg(String tripId, {TripFix? at}) async =>
+      _tripStatusFromJson(
+        await _send('POST', '/api/v1/trips/$tripId/next-leg', _fixBody(at))
+            as Map<String, dynamic>,
+      );
+
+  /// §9-2 위치 필드 — 측위에 실패했으면 아예 보내지 않는다 (서버는 없으면 기존 동작)
+  Map<String, dynamic>? _fixBody(TripFix? at) =>
+      at == null ? null : {'location': at.toJson()};
 
   @override
   Future<void> endTrip(String tripId) => _send('DELETE', '/api/v1/trips/$tripId');

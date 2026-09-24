@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../data/active_trip.dart';
 import '../data/api.dart';
 import '../data/recent_routes_store.dart';
+import '../data/trip_start.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
 import 'design/components/button.dart';
@@ -173,7 +174,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
       final JourneyTripStarted result;
       if (_saveToo) {
         final journey = await api.createJourney(_request());
-        final start = await api.startTrip(journey.id);
+        final start = await startJourneyTrip(journey.id);
         unawaited(
           activeTrip.begin(
             tripId: start.tripId,
@@ -188,7 +189,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
           journeyLabel: journey.label,
         );
       } else {
-        final start = await api.startTripWithLegs(legs);
+        final start = await startQuickTrip(legs);
         unawaited(
           activeTrip.begin(
             tripId: start.tripId,

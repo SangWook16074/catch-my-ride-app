@@ -7,6 +7,7 @@ import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/components/route_strip.dart';
 import 'package:catch_my_ride/ui/main_page.dart';
 import 'package:catch_my_ride/ui/trip_page.dart';
+import 'package:catch_my_ride/data/trip_start.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +25,7 @@ void main() {
     tester,
   ) async {
     api = MockNochijimaApi();
+    tripFixProvider = () async => null; // 테스트엔 geolocator 플러그인이 없다
     activeTrip = ActiveTripController();
     final journey = await api.createJourney(_request);
     final start = await api.startTrip(journey.id);

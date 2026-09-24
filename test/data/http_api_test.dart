@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:catch_my_ride/data/auth.dart';
 import 'package:catch_my_ride/data/http_api.dart';
+import 'package:catch_my_ride/domain/journey.dart';
 import 'package:catch_my_ride/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -223,5 +224,53 @@ void main() {
       DirectionOption(key: '상행', label: '당고개 방면'),
       DirectionOption(key: '하행', label: '하행'),
     ]);
+  });
+  // API.md §9-2 — "중간 시작": 출발지를 이미 지나 탄 상태로 시작하면 서버가 좌표로
+  // 타고 있는 열차를 잡는다 (좌표 없이 보내면 탑승역 뒤차를 잡던 버그, 2026-09-24)
+  test('트립 시작에 위치를 실어 보낸다 (§9-2)', () async {
+    final api = _api((request) async {
+      expect(request.url.path, '/api/v1/journeys/j-1/trips');
+      expect(jsonDecode(request.body), {
+        'location': {'lat': 37.554565, 'lng': 127.010449, 'accuracy': 30.0},
+      });
+      return _json({'tripId': 't-1', 'startedAt': '2026-09-24T08:00:00+09:00'}, 201);
+    });
+    final start = await api.startTrip(
+      'j-1',
+      at: const TripFix(
+        point: GeoPoint(latitude: 37.554565, longitude: 127.010449),
+        accuracyMeters: 30.0,
+      ),
+    );
+    expect(start.tripId, 't-1');
+  });
+
+  test('측위에 실패했으면 위치 없이 보낸다 — 시작을 막지 않는다', () async {
+    final api = _api((request) async {
+      expect(request.body, isEmpty); // location 키 자체를 보내지 않는다
+      return _json({'tripId': 't-2', 'startedAt': '2026-09-24T08:00:00+09:00'}, 201);
+    });
+    expect((await api.startTrip('j-1')).tripId, 't-2');
+  });
+
+  test('1회성 트립도 구간과 함께 위치를 싣는다 (FR-708)', () async {
+    final api = _api((request) async {
+      expect(request.url.path, '/api/v1/trips');
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      expect((body['legs'] as List).length, 1);
+      expect(body['location'], {'lat': 37.5, 'lng': 127.0});
+      return _json({'tripId': 't-3', 'startedAt': '2026-09-24T08:00:00+09:00'}, 201);
+    });
+    final start = await api.startTripWithLegs(
+      const [
+        JourneyLeg(
+          line: '3호선',
+          boardStop: '충무로',
+          alightStop: '교대',
+        ),
+      ],
+      at: const TripFix(point: GeoPoint(latitude: 37.5, longitude: 127.0)),
+    );
+    expect(start.tripId, 't-3');
   });
 }

@@ -9,6 +9,7 @@ import '../data/push_banner_store.dart';
 import '../data/push_registrar.dart';
 import '../data/suggestion_store.dart';
 import '../data/trip_store.dart';
+import '../data/trip_start.dart';
 import '../domain/buffer_suggestion.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
@@ -515,7 +516,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // 햅틱: 트립 시작 = 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
     HapticFeedback.mediumImpact();
     try {
-      final start = await api.startTrip(journey.id);
+      final start = await startJourneyTrip(journey.id);
       unawaited(
         activeTrip.begin(
           tripId: start.tripId,

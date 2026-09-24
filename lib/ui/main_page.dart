@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../data/api.dart';
 import '../data/active_trip.dart';
+import '../data/trip_start.dart';
 import '../domain/commute_report.dart';
 import '../domain/journey.dart';
 import '../domain/live_view.dart';
@@ -257,7 +258,7 @@ class _MainPageState extends State<MainPage> {
     // 햅틱: 트립 시작 = 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
     HapticFeedback.mediumImpact();
     try {
-      final start = await api.startTrip(journey.id);
+      final start = await startJourneyTrip(journey.id);
       // 이어보기·요약 카드·잠금화면 표면을 한 번에 건다 (서버에 활성 트립 조회가 없다 — §9)
       unawaited(
         activeTrip.begin(

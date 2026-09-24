@@ -20,6 +20,7 @@ import 'dart:developer' as developer;
 
 import 'package:geolocator/geolocator.dart';
 
+import '../domain/journey.dart';
 import '../domain/models.dart';
 
 /// 권한 거부 — 위저드가 주소 등록 폴백을 안내한다
@@ -31,7 +32,63 @@ const Duration _highAccuracyWait = Duration(seconds: 3);
 /// 전체 측위 상한 — 양쪽 요청 모두 이 시간에 타임아웃된다
 const Duration _totalWait = Duration(seconds: 12);
 const int _retries = 1;
+
+/// 트립 시작 측위 상한 — 이 시간을 넘기면 위치 없이 시작한다 (시작을 막지 않는다)
+const Duration _tripFixWait = Duration(seconds: 5);
+
+/// 최근 고정을 대신 쓸 수 있는 나이 상한 — 더 낡으면 다른 역을 가리킬 수 있다
+const Duration _lastKnownMaxAge = Duration(minutes: 2);
 const Duration _retryDelay = Duration(seconds: 1);
+
+/// 하차 알림 시작 1회 측위 (API.md §9-2 "중간 시작") — **실패는 null**, 시작을 막지 않는다.
+///
+/// 집 등록(requestCurrentLocation)과 목적이 다르다: 여기선 정확도보다 속도다. 시작 버튼을 누른
+/// 유저를 측위 때문에 기다리게 하지 않으므로 상한이 [_tripFixWait]고, 실패하면 최근 고정(2분 이내)만
+/// 대신 쓴다 — 더 낡은 위치는 엉뚱한 역을 고르게 하므로 버린다 (NFR-03).
+/// 상시 추적이 아니라 시작 시점 1회다 (NFR-05).
+Future<TripFix?> requestTripFix() async {
+  try {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null; // 거부 — 위치 없이 시작 (서버가 기존 동작으로 강등)
+    }
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: LocationSettings(
+        accuracy: LocationAccuracy.medium, // 역 하나를 가리면 충분 — 실내에서 고정밀은 자주 실패한다
+        timeLimit: _tripFixWait,
+      ),
+    ).timeout(_tripFixWait);
+    return _fixOf(position);
+  } catch (_) {
+    // 지하 측위 실패·권한 회수·플러그인 부재(테스트) — 최근 고정으로 한 번 더, 그래도 없으면 null
+    return _recentFix();
+  }
+}
+
+Future<TripFix?> _recentFix() async {
+  try {
+    final last = await Geolocator.getLastKnownPosition();
+    if (last == null) {
+      return null;
+    }
+    final age = DateTime.now().difference(last.timestamp);
+    return age <= _lastKnownMaxAge ? _fixOf(last) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+TripFix _fixOf(Position position) => TripFix(
+  point: GeoPoint(
+    latitude: position.latitude,
+    longitude: position.longitude,
+  ),
+  accuracyMeters: position.accuracy > 0 ? position.accuracy : null,
+);
 
 Future<GeoPoint> requestCurrentLocation() async {
   // 1) 권한 — 측위와 분리, 시간 제한 없음

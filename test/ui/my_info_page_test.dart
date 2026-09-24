@@ -6,6 +6,7 @@ import 'package:catch_my_ride/domain/models.dart';
 import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/my_info_page.dart';
 import 'package:catch_my_ride/ui/onboarding_page.dart';
+import 'package:catch_my_ride/data/trip_start.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -41,6 +42,7 @@ void main() {
     activeTrip = ActiveTripController();
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
+    tripFixProvider = () async => null; // 테스트엔 geolocator 플러그인이 없다
   });
 
   Future<void> pumpPage(WidgetTester tester) async {

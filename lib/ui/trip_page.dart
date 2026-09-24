@@ -10,6 +10,7 @@ import '../domain/journey.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
 import '../data/recent_routes_store.dart';
+import '../data/trip_start.dart';
 import 'components/ad_banner.dart';
 import 'components/route_strip.dart';
 import 'components/save_journey_sheet.dart';
@@ -110,7 +111,7 @@ class _TripPageState extends State<TripPage> {
     // 햅틱: 환승 재개 확정 (CLAUDE.md 적응형 UI 규칙)
     HapticFeedback.mediumImpact();
     try {
-      final status = await api.advanceTripLeg(widget.tripId);
+      final status = await advanceTrip(widget.tripId);
       activeTrip.apply(status);
     } catch (_) {
       unawaited(activeTrip.refresh());
@@ -142,9 +143,9 @@ class _TripPageState extends State<TripPage> {
     try {
       final TripStart start;
       if (journeyId != null) {
-        start = await api.startTrip(journeyId);
+        start = await startJourneyTrip(journeyId);
       } else {
-        start = await api.startTripWithLegs(legs!);
+        start = await startQuickTrip(legs!);
         unawaited(RecentRoutesStore().push(legs));
       }
       // 새 트립으로 갈아탄다 — 보관·잠금화면 표면·폴링을 컨트롤러가 다시 건다

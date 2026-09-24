@@ -240,6 +240,26 @@ enum TripPhase {
       values.firstWhere((phase) => phase.wire == wire);
 }
 
+/// 트립 시작 시점의 유저 위치 (API.md §9-2 "중간 시작") — 출발지를 이미 지나 **탄 상태**로
+/// 시작하면 탑승역 전광판에는 유저 뒤에 오는 열차만 있어 서버가 뒤차를 잡는다(2026-09-24 오너 제보).
+/// 좌표를 같이 보내면 서버가 "지금 있는 역" 기준으로 타고 있는 열차를 찾는다.
+/// 권한 거부·지하 측위 실패면 그냥 보내지 않는다 — 서버는 기존 동작으로 강등한다 (NFR-03).
+/// 상시 추적이 아니라 시작 버튼 1회 측위다 (NFR-05)
+class TripFix {
+  const TripFix({required this.point, this.accuracyMeters});
+
+  final GeoPoint point;
+
+  /// 측위 오차 반경(m) — 서버가 너무 부정확한 좌표를 버리는 근거. 모르면 null
+  final double? accuracyMeters;
+
+  Map<String, dynamic> toJson() => {
+    'lat': point.latitude,
+    'lng': point.longitude,
+    if (accuracyMeters != null) 'accuracy': accuracyMeters,
+  };
+}
+
 class TripStart {
   const TripStart({required this.tripId, required this.startedAt});
 

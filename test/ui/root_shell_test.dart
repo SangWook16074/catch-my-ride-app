@@ -4,6 +4,7 @@ import 'package:catch_my_ride/data/mock_api.dart';
 import 'package:catch_my_ride/ui/design/components/glass_nav_bar.dart';
 import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/root_shell.dart';
+import 'package:catch_my_ride/data/trip_start.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,7 @@ void main() {
   Future<void> pumpShell(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
+    tripFixProvider = () async => null; // 테스트엔 geolocator 플러그인이 없다
     activeTrip = ActiveTripController();
     await tester.pumpWidget(
       MaterialApp(

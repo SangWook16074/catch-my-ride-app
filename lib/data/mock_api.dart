@@ -585,7 +585,7 @@ class MockNochijimaApi implements NochijimaApi {
   }
 
   @override
-  Future<TripStart> startTrip(String journeyId) async {
+  Future<TripStart> startTrip(String journeyId, {TripFix? at}) async {
     final index = _journeys.indexWhere((j) => j.id == journeyId);
     if (index == -1) {
       throw _notFound();
@@ -614,7 +614,7 @@ class MockNochijimaApi implements NochijimaApi {
   }
 
   @override
-  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs) async {
+  Future<TripStart> startTripWithLegs(List<JourneyLeg> legs, {TripFix? at}) async {
     // §9-2 1회성 트립 — 여정 검증 규칙 공유, 동시 1개, 여정 목록·lastUsedAt은 건드리지 않는다
     final message = validateJourneyLegs(legs);
     if (message != null) {
@@ -656,7 +656,7 @@ class MockNochijimaApi implements NochijimaApi {
   }
 
   @override
-  Future<TripStatus> advanceTripLeg(String tripId) async {
+  Future<TripStatus> advanceTripLeg(String tripId, {TripFix? at}) async {
     final trip = _trip;
     if (trip == null || trip.tripId != tripId) {
       throw _notFound();
