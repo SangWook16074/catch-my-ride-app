@@ -10,6 +10,7 @@ import 'package:catch_my_ride/ui/components/route_strip.dart';
 import 'package:catch_my_ride/ui/journey_page.dart';
 import 'package:catch_my_ride/ui/trip_page.dart';
 import 'package:catch_my_ride/data/trip_start.dart';
+import 'package:catch_my_ride/platform/location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,6 +29,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
     tripFixProvider = () async => null; // 테스트엔 geolocator 플러그인이 없다
+    tripLocationGate = () async => TripLocationPermission.granted; // 권한 게이트도 통과 고정
   });
 
   Future<void> pumpPage(WidgetTester tester) async {
@@ -69,6 +71,26 @@ void main() {
     expect(find.text('여의도 → 당산'), findsOneWidget);
     expect(find.text('반복: 월·금'), findsOneWidget);
     expect(find.text('시작'), findsOneWidget);
+  });
+
+  testWidgets('위치 권한이 없으면 시작하지 않고 허용으로 유도한다 (오너 결정 2026-09-30)', (tester) async {
+    // 좌표 없는 시작은 곧 "뒤차 추적"이라 되는 척하지 않는다 — 권한 허용 유저만 쓴다.
+    // 굳은 거부(iOS 1회 거부 포함)는 동의창을 다시 띄울 수 없어 설정 경로로 유도한다
+    tripLocationGate = () async => TripLocationPermission.blocked;
+    tripFixProvider = () async =>
+        throw const TripLocationPermissionRequired(
+          TripLocationPermission.blocked,
+        ); // 게이트를 우회해도 서버를 부르지 않는다는 백스톱
+    await api.createJourney(_request);
+    await pumpPage(tester);
+
+    await tester.tap(find.text('시작'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('위치 권한이 필요해요'), findsOneWidget);
+    expect(find.text('설정에서 허용하기'), findsOneWidget);
+    expect(find.byType(TripPage), findsNothing); // 트립을 시작하지 않는다
+    expect(activeTrip.tripId, isNull); // 진행 중 트립도 걸리지 않는다
   });
 
   testWidgets('시작을 누르면 트립 화면에서 카운트다운이 보인다', (tester) async {

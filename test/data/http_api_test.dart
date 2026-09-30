@@ -231,7 +231,12 @@ void main() {
     final api = _api((request) async {
       expect(request.url.path, '/api/v1/journeys/j-1/trips');
       expect(jsonDecode(request.body), {
-        'location': {'lat': 37.554565, 'lng': 127.010449, 'accuracy': 30.0},
+        'location': {
+          'lat': 37.554565,
+          'lng': 127.010449,
+          'accuracy': 30.0,
+          'ageSeconds': 3,
+        },
       });
       return _json({'tripId': 't-1', 'startedAt': '2026-09-24T08:00:00+09:00'}, 201);
     });
@@ -240,6 +245,7 @@ void main() {
       at: const TripFix(
         point: GeoPoint(latitude: 37.554565, longitude: 127.010449),
         accuracyMeters: 30.0,
+        ageSeconds: 3, // 좌표 나이 — 서버가 낡은 좌표로 뒤차를 고르지 않게 (2026-09-29)
       ),
     );
     expect(start.tripId, 't-1');

@@ -6,6 +6,7 @@ import 'package:catch_my_ride/ui/components/commute_grass.dart';
 import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/main_page.dart';
 import 'package:catch_my_ride/data/trip_start.dart';
+import 'package:catch_my_ride/platform/location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +35,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi(); // 테스트는 실서버를 부르지 않는다
     tripFixProvider = () async => null; // 테스트엔 geolocator 플러그인이 없다
+    tripLocationGate = () async => TripLocationPermission.granted; // 권한 게이트도 통과 고정
   });
 
   testWidgets('기록이 없으면 잔디 대신 시작 안내를 보여준다', (tester) async {

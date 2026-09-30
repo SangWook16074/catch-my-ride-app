@@ -6,6 +6,7 @@ import 'package:catch_my_ride/ui/design/theme.dart';
 import 'package:catch_my_ride/ui/main_page.dart';
 import 'package:catch_my_ride/ui/trip_page.dart';
 import 'package:catch_my_ride/data/trip_start.dart';
+import 'package:catch_my_ride/platform/location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,6 +41,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     api = MockNochijimaApi();
     tripFixProvider = () async => null; // 테스트엔 geolocator 플러그인이 없다
+    tripLocationGate = () async => TripLocationPermission.granted; // 권한 게이트도 통과 고정
   });
 
   testWidgets('여정이 있으면 메인 하차 알림 섹션에 원탭 시작 카드가 보인다', (tester) async {

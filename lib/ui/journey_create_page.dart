@@ -9,6 +9,8 @@ import '../data/recent_routes_store.dart';
 import '../data/trip_start.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
+import '../platform/location.dart';
+import 'components/trip_location_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/components/chip.dart';
@@ -166,6 +168,11 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
       setState(() => _error = message);
       return;
     }
+    // 권한 확인을 **여정 생성보다 먼저** 한다 — 만들어 놓고 못 시작하면 목록에 남아 다시 누를 때
+    // 라벨 중복 400이 난다 (위치 권한은 하차 알림의 전제, 2026-09-30)
+    if (!await ensureTripLocationOrGuide(context) || !mounted) {
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -206,6 +213,13 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
       // 햅틱: 트립 시작 = 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
       unawaited(HapticFeedback.mediumImpact());
       Navigator.of(context).pop(result);
+    } on TripLocationPermissionRequired catch (denied) {
+      if (!mounted) {
+        return;
+      }
+      // 저장 스위치를 켠 경우 여정은 이미 만들어졌다 — 목록에 남고, 권한 허용 후 거기서 시작한다
+      setState(() => _saving = false);
+      unawaited(showTripLocationRequiredSheet(context, denied.permission));
     } on ApiException catch (error) {
       if (!mounted) {
         return;

@@ -9,12 +9,14 @@ import '../data/recent_routes_store.dart';
 import '../data/trip_start.dart';
 import '../domain/journey.dart';
 import '../domain/models.dart';
+import '../platform/location.dart';
 import 'components/active_trip_card.dart';
 import 'components/ad_banner.dart';
 import 'components/center_message.dart';
 import 'components/fade_route.dart';
 import 'components/save_journey_sheet.dart';
 import 'components/tab_header.dart';
+import 'components/trip_location_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
 import 'design/components/sheet.dart';
@@ -180,6 +182,10 @@ class _JourneyPageState extends State<JourneyPage> {
 
   /// 최근 간 길 원탭 재시작 — 1회성 트립 그대로 (FR-708)
   Future<void> _restartRecent(RecentRoute route) async {
+    // 위치 권한이 하차 알림의 전제다 — 없으면 허용으로 유도하고 시작하지 않는다 (2026-09-30)
+    if (!await ensureTripLocationOrGuide(context) || !mounted) {
+      return;
+    }
     HapticFeedback.mediumImpact();
     try {
       final start = await startQuickTrip(route.legs);
@@ -204,6 +210,11 @@ class _JourneyPageState extends State<JourneyPage> {
         ),
       );
       unawaited(_load());
+    } on TripLocationPermissionRequired catch (denied) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(showTripLocationRequiredSheet(context, denied.permission));
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -231,6 +242,9 @@ class _JourneyPageState extends State<JourneyPage> {
   }
 
   Future<void> _startTrip(Journey journey) async {
+    if (!await ensureTripLocationOrGuide(context) || !mounted) {
+      return;
+    }
     // 햅틱: 트립 시작 = 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
     HapticFeedback.mediumImpact();
     try {
@@ -257,6 +271,11 @@ class _JourneyPageState extends State<JourneyPage> {
       );
       // 트립에서 돌아오면 히스토리(lastUsedAt) 순서를 반영
       unawaited(_load());
+    } on TripLocationPermissionRequired catch (denied) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(showTripLocationRequiredSheet(context, denied.permission));
     } on ApiException catch (error) {
       if (!mounted) {
         return;

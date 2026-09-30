@@ -17,6 +17,7 @@ library;
 
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:geolocator/geolocator.dart';
 
@@ -25,6 +26,30 @@ import '../domain/models.dart';
 
 /// 권한 거부 — 위저드가 주소 등록 폴백을 안내한다
 class LocationPermissionDenied implements Exception {}
+
+/// 하차 알림 위치 권한 상태 (오너 결정 2026-09-30: **권한을 허용한 유저만 하차 알림을 쓴다**).
+/// 집 등록(FR-101)처럼 주소 폴백으로 대체할 수 있는 기능이 아니다 — 좌표가 없으면 서버가
+/// 유저 뒤에 오는 열차를 잡아 하차 푸시가 내릴 역을 지난 뒤에 온다(= 틀린 알림, NFR-01)
+enum TripLocationPermission {
+  granted,
+
+  /// 거부 — 다시 물어볼 수 있다 (안드로이드 1회 거부·아직 미결정)
+  denied,
+
+  /// 거부가 굳었다 — 시스템이 동의창을 다시 띄우지 않으므로 설정 앱으로 보낸다
+  blocked,
+
+  /// 권한은 있는데 기기 위치 기능 자체가 꺼져 있다 — 좌표를 얻을 수 없으므로 같이 막는다
+  serviceOff,
+}
+
+/// 하차 알림 시작을 막는 사유 — 호출부(UI)가 안내 시트를 띄운다.
+/// 트립 시작·환승 재개는 이 예외가 나면 **서버를 부르지 않는다**
+class TripLocationPermissionRequired implements Exception {
+  const TripLocationPermissionRequired(this.permission);
+
+  final TripLocationPermission permission;
+}
 
 /// 이 시간까지는 고정밀을 우선한다(정확도 우선) — 그 안에 오면 저정밀보다 고정밀 채택
 const Duration _highAccuracyWait = Duration(seconds: 3);
@@ -36,26 +61,32 @@ const int _retries = 1;
 /// 트립 시작 측위 상한 — 이 시간을 넘기면 위치 없이 시작한다 (시작을 막지 않는다)
 const Duration _tripFixWait = Duration(seconds: 5);
 
-/// 최근 고정을 대신 쓸 수 있는 나이 상한 — 더 낡으면 다른 역을 가리킬 수 있다
-const Duration _lastKnownMaxAge = Duration(minutes: 2);
+/// 최근 고정을 대신 쓸 수 있는 나이 상한 — 더 낡으면 다른 역을 가리킨다.
+/// 2분은 달리는 열차로 한두 정거장이라 **유저 뒤 열차**를 고르게 했다 (2026-09-29: 2분 → 1분,
+/// 서버도 90초 초과 좌표를 버린다 — API.md §9-2)
+const Duration _lastKnownMaxAge = Duration(minutes: 1);
 const Duration _retryDelay = Duration(seconds: 1);
 
-/// 하차 알림 시작 1회 측위 (API.md §9-2 "중간 시작") — **실패는 null**, 시작을 막지 않는다.
+/// 하차 알림 시작 1회 측위 (API.md §9-2 "중간 시작").
+///
+/// **권한이 없으면 [TripLocationPermissionRequired]로 막는다** (오너 결정 2026-09-30) —
+/// 좌표 없는 시작은 곧 "뒤차 추적"이라 기능이 제 몫을 못 한다. 권한이 있는데 **측위만 실패한
+/// 경우는 null**로 그냥 시작한다(서버가 탑승역 시드로 강등) — 시작 버튼을 지하에서 죽이지 않는다.
 ///
 /// 집 등록(requestCurrentLocation)과 목적이 다르다: 여기선 정확도보다 속도다. 시작 버튼을 누른
-/// 유저를 측위 때문에 기다리게 하지 않으므로 상한이 [_tripFixWait]고, 실패하면 최근 고정(2분 이내)만
+/// 유저를 측위 때문에 기다리게 하지 않으므로 상한이 [_tripFixWait]고, 실패하면 최근 고정(1분 이내)만
 /// 대신 쓴다 — 더 낡은 위치는 엉뚱한 역을 고르게 하므로 버린다 (NFR-03).
-/// 상시 추적이 아니라 시작 시점 1회다 (NFR-05).
+/// 좌표의 **나이를 함께 보낸다** — 서버가 낡은 좌표로 뒤차를 고르지 않도록 (2026-09-29).
+/// 지하 오차(±수백 m~2km)는 버리지 않는다: 서버가 "탑승역에서 몇 정거장 지났는지"만 가려도
+/// 뒤차는 걸러진다. 상시 추적이 아니라 시작 시점 1회다 (NFR-05).
 Future<TripFix?> requestTripFix() async {
+  final permission = await ensureTripLocationPermission();
+  if (permission != TripLocationPermission.granted) {
+    // 권한 없이는 시작하지 않는다 (오너 결정 2026-09-30) — 예전엔 좌표 없이 시작했는데,
+    // 그건 서버가 탑승역 전광판의 **뒤차**를 잡는다는 뜻이었다
+    throw TripLocationPermissionRequired(permission);
+  }
   try {
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return null; // 거부 — 위치 없이 시작 (서버가 기존 동작으로 강등)
-    }
     final position = await Geolocator.getCurrentPosition(
       locationSettings: LocationSettings(
         accuracy: LocationAccuracy.medium, // 역 하나를 가리면 충분 — 실내에서 고정밀은 자주 실패한다
@@ -66,6 +97,46 @@ Future<TripFix?> requestTripFix() async {
   } catch (_) {
     // 지하 측위 실패·권한 회수·플러그인 부재(테스트) — 최근 고정으로 한 번 더, 그래도 없으면 null
     return _recentFix();
+  }
+}
+
+/// 하차 알림 시작 전 권한 확인 — 미결정이면 여기서 한 번 묻는다(동의창 대기에 제한 없음:
+/// 측위 타임아웃 안에 권한을 넣으면 최초 사용자가 무조건 실패한다, 2026-09-09 미니앱 실측).
+/// 플러그인·채널 오류는 "권한 없음"으로 본다 — 아는 척하지 않는다 (NFR-03)
+Future<TripLocationPermission> ensureTripLocationPermission() async {
+  try {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.unableToDetermine) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission != LocationPermission.always &&
+        permission != LocationPermission.whileInUse) {
+      // iOS는 한 번 거부하면 동의창을 다시 띄워주지 않는다(위 요청이 즉시 denied로 돌아온다) —
+      // "확인"만 있는 시트를 반복해서 보여주면 막다른 길이라 설정 경로로 보낸다
+      final askable = permission != LocationPermission.deniedForever && !Platform.isIOS;
+      return askable ? TripLocationPermission.denied : TripLocationPermission.blocked;
+    }
+    // 권한은 있어도 기기 위치 기능이 꺼져 있으면 좌표가 안 나온다 — 같이 걸러 낸다
+    return await Geolocator.isLocationServiceEnabled()
+        ? TripLocationPermission.granted
+        : TripLocationPermission.serviceOff;
+  } catch (_) {
+    return TripLocationPermission.denied;
+  }
+}
+
+/// 굳은 거부는 앱에서 풀 수 없다 — 이 앱의 설정 화면으로 보낸다 (알림 권한 시트와 같은 패턴)
+Future<void> openAppLocationSettings() => _open(Geolocator.openAppSettings);
+
+/// 기기 위치 기능 자체가 꺼진 경우 — 앱 설정이 아니라 시스템 위치 설정으로 보낸다
+Future<void> openDeviceLocationSettings() => _open(Geolocator.openLocationSettings);
+
+Future<void> _open(Future<bool> Function() opener) async {
+  try {
+    await opener();
+  } catch (_) {
+    // 설정을 열 수 없는 기기 — 시트 문구가 경로를 이미 알려 준다
   }
 }
 
@@ -88,7 +159,14 @@ TripFix _fixOf(Position position) => TripFix(
     longitude: position.longitude,
   ),
   accuracyMeters: position.accuracy > 0 ? position.accuracy : null,
+  ageSeconds: _ageSecondsOf(position),
 );
+
+/// 좌표를 딴 시각부터 지금까지(초) — 음수(기기 시계 어긋남)는 0으로 본다
+int _ageSecondsOf(Position position) {
+  final age = DateTime.now().difference(position.timestamp).inSeconds;
+  return age < 0 ? 0 : age;
+}
 
 Future<GeoPoint> requestCurrentLocation() async {
   // 1) 권한 — 측위와 분리, 시간 제한 없음

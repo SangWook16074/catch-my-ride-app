@@ -246,17 +246,23 @@ enum TripPhase {
 /// 권한 거부·지하 측위 실패면 그냥 보내지 않는다 — 서버는 기존 동작으로 강등한다 (NFR-03).
 /// 상시 추적이 아니라 시작 버튼 1회 측위다 (NFR-05)
 class TripFix {
-  const TripFix({required this.point, this.accuracyMeters});
+  const TripFix({required this.point, this.accuracyMeters, this.ageSeconds});
 
   final GeoPoint point;
 
   /// 측위 오차 반경(m) — 서버가 너무 부정확한 좌표를 버리는 근거. 모르면 null
   final double? accuracyMeters;
 
+  /// 이 좌표를 딴 뒤 흐른 시간(초) — 지하에서 실패해 **최근 고정**을 대신 쓸 때가 있어서 필요하다.
+  /// 달리는 열차의 낡은 좌표는 한두 정거장 뒤를 가리켜 서버가 **뒤차**를 자신 있게 고르게 한다
+  /// (2026-09-29 개정). 모르면 null
+  final int? ageSeconds;
+
   Map<String, dynamic> toJson() => {
     'lat': point.latitude,
     'lng': point.longitude,
     if (accuracyMeters != null) 'accuracy': accuracyMeters,
+    if (ageSeconds != null) 'ageSeconds': ageSeconds,
   };
 }
 

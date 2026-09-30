@@ -76,7 +76,7 @@ lib/
 
 | 브리지 | 방향 | 용도 |
 |---|---|---|
-| geolocator 플러그인 (`lib/platform/location.dart`) | Flutter → OS | ① 온보딩 집 위치 1회 등록 (FR-101) ② 하차 알림 트립 시작 1회 측위 (API.md §9-2 "중간 시작" — 출발지를 이미 지나 탄 상태로 시작하면 서버가 좌표로 **타고 있는 열차**를 잡는다. 호출부는 `lib/data/trip_start.dart` 하나, 실패·거부는 좌표 없이 그대로 시작). 둘 다 1회성 — 상시 추적 금지(NFR-05) |
+| geolocator 플러그인 (`lib/platform/location.dart`) | Flutter → OS | ① 온보딩 집 위치 1회 등록 (FR-101) ② 하차 알림 트립 시작 1회 측위 (API.md §9-2 "중간 시작" — 출발지를 이미 지나 탄 상태로 시작하면 서버가 좌표로 **타고 있는 열차**를 잡는다. 호출부는 `lib/data/trip_start.dart` 하나). **권한 거부·굳은 거부·기기 위치 꺼짐이면 트립을 시작하지 않고 허용으로 유도한다** — 시작 액션은 `ensureTripLocationOrGuide`(ui/components/trip_location_sheet.dart)를 먼저 통과하고(허용되면 그대로 진행), 게이트를 우회한 경로에서도 `requestTripFix`가 `TripLocationPermissionRequired`를 던져 서버를 부르지 않는다 (오너 결정 2026-09-30: 좌표 없는 시작 = 뒤차 추적이라 되는 척하지 않는다). 권한이 있는데 측위만 실패하면 좌표 없이 시작(서버가 탑승역 시드로 강등). 둘 다 1회성 — 상시 추적 금지(NFR-05) |
 | shared_preferences 플러그인 (`lib/data/suggestion_store.dart`, `lib/data/auth.dart`, `lib/data/trip_store.dart`, `lib/data/recent_routes_store.dart`) | Flutter → OS | 버퍼 추천 처리 시각·익명 키(§8-3)·진행 중 트립 id와 1회성 구간 스냅숏·최근 간 길(FR-708) 등 경량 로컬 저장 |
 | app_links 플러그인 (`lib/platform/deep_links.dart`) | OS → Flutter | 딥링크 수신 — `catchmyride://open?from=push&notifiedDate=…` (스킴: iOS Info.plist / Android manifest) |
 | firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link)·iOS 포그라운드 배너 표시(트립 중 하차·환승 푸시 §9-4). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |

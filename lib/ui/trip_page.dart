@@ -6,14 +6,16 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../data/active_trip.dart';
 import '../data/api.dart';
+import '../data/recent_routes_store.dart';
+import '../data/trip_start.dart';
 import '../domain/journey.dart';
 import '../domain/live_view.dart';
 import '../domain/models.dart';
-import '../data/recent_routes_store.dart';
-import '../data/trip_start.dart';
+import '../platform/location.dart';
 import 'components/ad_banner.dart';
 import 'components/route_strip.dart';
 import 'components/save_journey_sheet.dart';
+import 'components/trip_location_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/sheet.dart';
 import 'design/tokens.dart';
@@ -108,11 +110,22 @@ class _TripPageState extends State<TripPage> {
   }
 
   Future<void> _advanceLeg() async {
+    // 새 구간도 위치로 탄 열차를 잡는다 — 권한이 없으면 재개하지 않고 허용으로 유도한다.
+    // 트립은 서버에서 환승 대기로 남아 있어 허용 후 다시 누르면 그대로 이어진다 (2026-09-30)
+    if (!await ensureTripLocationOrGuide(context) || !mounted) {
+      return;
+    }
     // 햅틱: 환승 재개 확정 (CLAUDE.md 적응형 UI 규칙)
     HapticFeedback.mediumImpact();
     try {
       final status = await advanceTrip(widget.tripId);
       activeTrip.apply(status);
+    } on TripLocationPermissionRequired catch (denied) {
+      // 권한 없이 재개하면 새 구간에서 뒤차를 잡는다 — 트립은 환승 대기로 남아 있으니
+      // 권한을 허용하고 다시 누르면 그대로 이어진다 (오너 결정 2026-09-30)
+      if (mounted) {
+        unawaited(showTripLocationRequiredSheet(context, denied.permission));
+      }
     } catch (_) {
       unawaited(activeTrip.refresh());
     }
@@ -131,6 +144,9 @@ class _TripPageState extends State<TripPage> {
     final journeyId = widget.journeyId;
     final legs = widget.legs;
     if (!_canRestart || _restarting) {
+      return;
+    }
+    if (!await ensureTripLocationOrGuide(context) || !mounted) {
       return;
     }
     setState(() => _restarting = true);
@@ -170,6 +186,12 @@ class _TripPageState extends State<TripPage> {
           ),
         ),
       );
+    } on TripLocationPermissionRequired catch (denied) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _restarting = false);
+      unawaited(showTripLocationRequiredSheet(context, denied.permission));
     } on ApiException catch (error) {
       if (!mounted) {
         return;
