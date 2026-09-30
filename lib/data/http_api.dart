@@ -381,6 +381,7 @@ TripStatus _tripStatusFromJson(Map<String, dynamic> json) => TripStatus(
   eventStop: json['eventStop'] as String,
   realtimeAvailable: json['realtimeAvailable'] as bool? ?? true,
   fetchedAt: json['fetchedAt'] as String,
+  lastSeenAt: json['lastSeenAt'] as String?, // 구버전 서버는 안 준다 — null 허용
 );
 
 CommuteRoute _routeFromJson(Map<String, dynamic> json) => CommuteRoute(

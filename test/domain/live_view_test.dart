@@ -68,6 +68,30 @@ void main() {
     });
   });
 
+  // §9-3 lastSeenAt — 실시간이 끊긴 동안 "언제 기준 값인지" 말하기 위한 포맷 (오너 결정 2026-09-30:
+  // 한번 잡힌 트립은 끊지 않는다 → 낡은 숫자를 현재처럼 보여주지 않으려면 기준 시각이 필요하다)
+  group('formatSeenAgo', () {
+    final now = DateTime.parse('2026-09-30T22:40:00');
+
+    test('1분 미만은 방금', () {
+      expect(formatSeenAgo('2026-09-30T22:39:30', now: now), '방금');
+    });
+
+    test('분 단위로 말한다', () {
+      expect(formatSeenAgo('2026-09-30T22:36:00', now: now), '4분 전');
+      expect(formatSeenAgo('2026-09-30T21:45:00', now: now), '55분 전');
+    });
+
+    test('60분 이상은 시간 단위', () {
+      expect(formatSeenAgo('2026-09-30T20:30:00', now: now), '2시간 전');
+    });
+
+    test('파싱 불가·미래 값은 null — 아는 척하지 않는다 (NFR-03)', () {
+      expect(formatSeenAgo('언젠가', now: now), isNull);
+      expect(formatSeenAgo('2026-09-30T22:41:00', now: now), isNull);
+    });
+  });
+
   group('formatFetchedAt', () {
     test('HH:MM:SS 로컬 표기', () {
       // 타임존 오프셋 없는 ISO 문자열은 로컬 시각으로 파싱된다

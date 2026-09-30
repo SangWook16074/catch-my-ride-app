@@ -741,6 +741,8 @@ class _MockTrip {
       eventStop: legs[legIndex].alightStop,
       realtimeAvailable: true,
       fetchedAt: DateTime.now().toIso8601String(),
+      // 실서버 미러: 특정 후에만 목격 시각이 있다 (§9-3 lastSeenAt)
+      lastSeenAt: identified ? DateTime.now().toIso8601String() : null,
     );
   }
 }

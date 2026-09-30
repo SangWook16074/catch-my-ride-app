@@ -531,13 +531,22 @@ class _TripPageState extends State<TripPage> {
   }
 
   Widget _footer(TripStatus status) {
+    // 실시간이 끊긴 동안에도 추적은 유지된다(오너 결정 2026-09-30) — 그래서 지금 보이는 숫자가
+    // **언제 기준**인지 말해줘야 한다. 낡은 값을 현재처럼 보여주면 조용히 틀리는 것과 같다 (NFR-03)
+    final seenAgo = status.realtimeAvailable || status.lastSeenAt == null
+        ? null
+        : formatSeenAgo(status.lastSeenAt!);
     return Text(
       _stale
           ? '갱신이 늦어져 마지막 정보를 보여드리고 있어요'
+          : seenAgo != null
+          ? '열차 위치는 $seenAgo 기준이에요 · 실시간 정보 없음'
           : '${formatFetchedAt(status.fetchedAt)} 기준'
                 '${status.realtimeAvailable ? '' : ' · 실시간 정보 없음'}',
       style: AppTypo.caption.copyWith(
-        color: _stale ? context.colors.cautionStrong : context.colors.inkFaint,
+        color: _stale || seenAgo != null
+            ? context.colors.cautionStrong
+            : context.colors.inkFaint,
       ),
     );
   }

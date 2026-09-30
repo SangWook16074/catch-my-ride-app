@@ -41,6 +41,27 @@ String notificationSummary(CommuteSetting setting) {
   return '현재 여유있게 $minutes분 전에 알림을 보내드려요';
 }
 
+/// "마지막으로 열차를 본 게 얼마 전인지" — 실시간이 끊긴 동안 화면이 기준 시각을 말할 때 쓴다
+/// (§9-3 `lastSeenAt`, 오너 결정 2026-09-30). 1분 미만은 "방금", 60분 이상은 시간 단위.
+/// 파싱 불가·미래 값은 null — 아는 척하지 않는다 (NFR-03)
+String? formatSeenAgo(String iso, {DateTime? now}) {
+  final seen = DateTime.tryParse(iso)?.toLocal();
+  if (seen == null) {
+    return null;
+  }
+  final elapsed = (now ?? DateTime.now()).difference(seen);
+  if (elapsed.isNegative) {
+    return null;
+  }
+  if (elapsed.inMinutes < 1) {
+    return '방금';
+  }
+  if (elapsed.inMinutes < 60) {
+    return '${elapsed.inMinutes}분 전';
+  }
+  return '${elapsed.inHours}시간 전';
+}
+
 String formatFetchedAt(String iso) {
   final date = DateTime.parse(iso).toLocal();
   String pad(int n) => n.toString().padLeft(2, '0');

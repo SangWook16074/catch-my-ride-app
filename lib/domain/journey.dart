@@ -282,6 +282,7 @@ class TripStatus {
     required this.eventStop,
     required this.realtimeAvailable,
     required this.fetchedAt,
+    this.lastSeenAt,
   });
 
   final TripPhase phase;
@@ -297,4 +298,9 @@ class TripStatus {
   final String eventStop;
   final bool realtimeAvailable;
   final String fetchedAt;
+
+  /// 이 열차를 상류에서 마지막으로 목격한 시각(ISO, 모르면 null) — §9-3.
+  /// 특정 후 목격이 끊겨도 추적은 끊지 않기로 했으므로(오너 결정 2026-09-30) 화면이 "언제 기준
+  /// 값인지" 말할 수 있어야 한다. 낡은 숫자를 현재처럼 보여주면 조용히 틀리는 것과 같다 (NFR-03)
+  final String? lastSeenAt;
 }
