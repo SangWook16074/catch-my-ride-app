@@ -259,6 +259,32 @@ void main() {
     expect((await api.startTrip('j-1')).tripId, 't-2');
   });
 
+  test('다시 잡기도 위치를 실어 보낸다 (§9-3)', () async {
+    final api = _api((request) async {
+      expect(request.url.path, '/api/v1/trips/t-9/re-identify');
+      expect(jsonDecode(request.body), {
+        'location': {'lat': 37.613292, 'lng': 127.030053},
+      });
+      return _json({
+        'phase': 'TRACKING',
+        'legIndex': 0,
+        'remainingStops': null,
+        'currentStop': null,
+        'eventStop': '충무로',
+        'realtimeAvailable': true,
+        'fetchedAt': '2026-09-30T22:00:00+09:00',
+      }, 200);
+    });
+
+    final status = await api.reIdentifyTrip(
+      't-9',
+      at: const TripFix(point: GeoPoint(latitude: 37.613292, longitude: 127.030053)),
+    );
+
+    expect(status.phase, TripPhase.tracking);
+    expect(status.remainingStops, isNull); // 초기화 — 낡은 카운트를 이어 쓰지 않는다
+  });
+
   test('1회성 트립도 구간과 함께 위치를 싣는다 (FR-708)', () async {
     final api = _api((request) async {
       expect(request.url.path, '/api/v1/trips');

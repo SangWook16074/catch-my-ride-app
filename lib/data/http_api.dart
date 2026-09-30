@@ -317,6 +317,13 @@ class HttpNochijimaApi implements NochijimaApi {
             as Map<String, dynamic>,
       );
 
+  @override
+  Future<TripStatus> reIdentifyTrip(String tripId, {TripFix? at}) async =>
+      _tripStatusFromJson(
+        await _send('POST', '/api/v1/trips/$tripId/re-identify', _fixBody(at))
+            as Map<String, dynamic>,
+      );
+
   /// §9-2 위치 필드 — 측위에 실패했으면 아예 보내지 않는다 (서버는 없으면 기존 동작)
   Map<String, dynamic>? _fixBody(TripFix? at) =>
       at == null ? null : {'location': at.toJson()};

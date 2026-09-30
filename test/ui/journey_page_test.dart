@@ -131,6 +131,27 @@ void main() {
     expect(find.byType(TripPage), findsNothing);
   });
 
+  testWidgets('내가 탄 열차가 아니에요 — 같은 트립에서 다시 잡는다 (§9-3, 오너 요청 2026-09-30)', (tester) async {
+    // 서버가 뒤차를 잡으면 카운트다운이 어긋난다. 트립을 버리지 않고 그 자리에서 다시 잡는다
+    await api.createJourney(_request);
+    await pumpPage(tester);
+    await tester.tap(find.text('시작'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    // 폴링이 한 번 더 돌면 열차가 특정돼 카운트다운이 보인다
+    await tester.pump(const Duration(seconds: 20));
+    await tester.pump();
+
+    await tester.tap(find.text('내가 탄 열차가 아니에요'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // 다시 "위치 확인 중"으로 — 낡은 카운트를 이어서 보여주지 않는다 (§9-3 초기화)
+    expect(find.byType(TripPage), findsOneWidget);
+    expect(find.text('탄 열차를 다시 찾고 있어요'), findsOneWidget);
+  });
+
   testWidgets('트립을 끝내지 않고 나오면 메인과 같은 진행 중 카드가 보인다', (tester) async {
     // 오너 요청 2026-09-22 — 탭마다 다른 모양을 쓰지 않는다 (ActiveTripCard 공용)
     await api.createJourney(_request);

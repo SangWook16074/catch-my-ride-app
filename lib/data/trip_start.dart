@@ -39,3 +39,8 @@ Future<TripStart> startQuickTrip(List<JourneyLeg> legs) async =>
 /// 환승 후 다음 구간 재개 (§9-3) — 늦게 눌러도 탄 열차를 잡도록 같은 규칙
 Future<TripStatus> advanceTrip(String tripId) async =>
     api.advanceTripLeg(tripId, at: await tripFixProvider());
+
+/// 다시 잡기 (§9-3) — 서버가 내가 탄 열차가 아닌 차량을 추적할 때. 위치가 특히 중요하다:
+/// 이미 몇 정거장 갔으니 탑승역 전광판으로는 다시 잡을 수 없다 (오너 요청 2026-09-30)
+Future<TripStatus> reIdentifyTrip(String tripId) async =>
+    api.reIdentifyTrip(tripId, at: await tripFixProvider());

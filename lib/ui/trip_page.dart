@@ -51,6 +51,9 @@ class _TripPageState extends State<TripPage> {
   /// (오너 피드백 2026-09-22: 화면마다 따로 폴링해서 탭 카드가 낡은 값에 묶였다)
   bool _restarting = false;
 
+  /// "내가 탄 열차가 아니에요" 진행 중 — 연타로 되돌리기 횟수를 낭비하지 않게 잠근다 (§9-3)
+  bool _reIdentifying = false;
+
   /// 1회성 트립을 완료 후 여정으로 저장했으면 그 라벨 — 저장 버튼을 안내로 바꾼다 (FR-708)
   String? _savedLabel;
 
@@ -128,6 +131,48 @@ class _TripPageState extends State<TripPage> {
       }
     } catch (_) {
       unawaited(activeTrip.refresh());
+    }
+  }
+
+  /// "내가 탄 열차가 아니에요" — 이 구간을 다시 잡는다 (§9-3, 오너 요청 2026-09-30).
+  ///
+  /// 서버가 뒤차·앞차를 특정하면 카운트다운과 하차 알림이 유저 열차와 어긋난다. 트립을 버리고
+  /// 새로 시작하면 1회성 구간·저장 흐름을 다시 타야 하므로 여기서 바로 고친다. 위치가 필요한
+  /// 이유도 시작과 같다 — 이미 몇 정거장 갔으니 탑승역 전광판으로는 못 잡는다
+  Future<void> _reIdentify() async {
+    if (_reIdentifying) {
+      return;
+    }
+    if (!await ensureTripLocationOrGuide(context) || !mounted) {
+      return;
+    }
+    setState(() => _reIdentifying = true);
+    HapticFeedback.mediumImpact();
+    try {
+      final status = await reIdentifyTrip(widget.tripId);
+      activeTrip.apply(status);
+      if (mounted) {
+        _showMessage(
+          '탄 열차를 다시 찾고 있어요',
+          '지금 계신 위치를 기준으로 다시 잡아요. 조금 뒤 남은 정거장을 다시 알려드릴게요.',
+        );
+      }
+    } on TripLocationPermissionRequired catch (denied) {
+      if (mounted) {
+        unawaited(showTripLocationRequiredSheet(context, denied.permission));
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        _showMessage('다시 잡을 수 없어요', error.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('다시 잡을 수 없어요', '네트워크를 확인하고 다시 시도해주세요');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _reIdentifying = false);
+      }
     }
   }
 
@@ -419,6 +464,15 @@ class _TripPageState extends State<TripPage> {
               ),
             ],
             const SizedBox(height: AppSpace.lg),
+            // 서버가 유저가 탄 열차가 아닌 차량을 잡았을 때의 출구 (§9-3 다시 잡기).
+            // "현재 ○○ 부근"이 내 위치와 다르면 유저가 제일 먼저 알아챈다 (오너 요청 2026-09-30)
+            AppButton(
+              label: _reIdentifying ? '다시 잡고 있어요…' : '내가 탄 열차가 아니에요',
+              variant: AppButtonVariant.tonal,
+              medium: true,
+              onPressed: _reIdentifying ? null : () => unawaited(_reIdentify()),
+            ),
+            const SizedBox(height: AppSpace.md),
             _footer(status),
           ],
         );

@@ -671,6 +671,26 @@ class MockNochijimaApi implements NochijimaApi {
   }
 
   @override
+  Future<TripStatus> reIdentifyTrip(String tripId, {TripFix? at}) async {
+    final trip = _trip;
+    if (trip == null || trip.tripId != tripId) {
+      throw _notFound();
+    }
+    final phase = trip.status().phase;
+    if (phase == TripPhase.transfer || phase == TripPhase.done) {
+      throw _invalid('추적 중인 구간이 아닙니다');
+    }
+    if (trip.reIdentifyCount >= 3) {
+      throw _invalid('열차를 너무 여러 번 다시 잡았어요. 트립을 다시 시작해주세요');
+    }
+    // 실서버 §9-3 미러: 물린 열차를 빼고 위치 확인 중부터 다시 (카운트는 그 구간 처음부터)
+    trip.reIdentifyCount++;
+    trip.remainingStops = _mockLegStops;
+    trip.identified = false;
+    return trip.status();
+  }
+
+  @override
   Future<void> endTrip(String tripId) async {
     // 완료·취소 공용, 멱등 (§9-3) — 없는 트립도 에러 아님
     if (_trip?.tripId == tripId) {
@@ -698,6 +718,9 @@ class _MockTrip {
 
   /// false = 열차 특정 전(위치 확인 중) — 실서버 §9-3의 remaining null 상태
   bool identified = false;
+
+  /// "내가 탄 열차가 아니에요" 횟수 — 실서버와 같이 구간당 3회 제한 (§9-3)
+  int reIdentifyCount = 0;
 
   TripStatus status() {
     final isLastLeg = legIndex >= legs.length - 1;

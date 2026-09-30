@@ -83,6 +83,11 @@ abstract interface class NochijimaApi {
   /// [at]은 startTrip과 같은 이유 — 환승 후 늦게 눌러도 탄 열차를 잡는다
   Future<TripStatus> advanceTripLeg(String tripId, {TripFix? at});
 
+  /// §9-3 — 다시 잡기: 서버가 내가 탄 열차가 아닌 차량을 추적할 때 (오너 요청 2026-09-30).
+  /// 물린 열차는 서버가 후보에서 빼고, [at]으로 지금 위치 기준으로 다시 잡는다.
+  /// 환승 대기·완료 상태이거나 구간당 3회를 넘기면 400
+  Future<TripStatus> reIdentifyTrip(String tripId, {TripFix? at});
+
   /// §9-3 — 트립 종료 (완료·취소 공용, 멱등)
   Future<void> endTrip(String tripId);
 }
