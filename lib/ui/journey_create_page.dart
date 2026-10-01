@@ -187,6 +187,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
             tripId: start.tripId,
             label: journey.label,
             journeyId: journey.id,
+            legIndex: start.legIndex,
           ),
         );
         result = JourneyTripStarted(
@@ -202,6 +203,7 @@ class _JourneyCreatePageState extends State<JourneyCreatePage> {
             tripId: start.tripId,
             label: journeyPathSummary(legs),
             legs: legs,
+            legIndex: start.legIndex,
           ),
         );
         unawaited(RecentRoutesStore().push(legs));

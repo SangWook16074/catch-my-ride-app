@@ -52,6 +52,9 @@
 	<string>출발지(집 위치) 등록으로 출발 시각을 계산하고, 하차 알림을 시작할 때 타고 있는 열차를 찾는 데 사용해요. 두 경우 모두 그때 한 번만 읽고 계속 추적하지 않아요.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<!-- §9-5 v0.12 — 서버가 역 이동마다 우선순위 10으로 갱신하므로 갱신 예산을 넓힌다 -->
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

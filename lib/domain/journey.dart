@@ -8,6 +8,12 @@ const int maxJourneys = 10;
 const int maxJourneyLegs = 4;
 const int journeyLabelMaxLength = 16;
 
+/// 트립당 구간 바꾸기 한도 (API.md §9-3 v0.10) — 넘으면 400, "다시 시작해주세요"
+const int maxSwitchLegCount = 3;
+
+/// 트립당 "아직 안 내렸어요" 한도 (API.md §9-3 v0.11) — 넘으면 400
+const int maxUndoAlightCount = 2;
+
 /// 여정의 한 구간 — 탑승 역에서 노선을 타고 하차(환승) 역까지. v1은 지하철만 (FR-703)
 class JourneyLeg {
   const JourneyLeg({
@@ -267,10 +273,18 @@ class TripFix {
 }
 
 class TripStart {
-  const TripStart({required this.tripId, required this.startedAt});
+  const TripStart({
+    required this.tripId,
+    required this.startedAt,
+    this.legIndex = 0,
+  });
 
   final String tripId;
   final String startedAt;
+
+  /// 시작 구간 판정 결과(v0.10, API.md §9-2) — 없으면(구버전 서버) 0으로 읽는다.
+  /// 0이 아니면 "○○ → ○○ 구간부터 안내할게요" 1회 안내의 근거가 된다
+  final int legIndex;
 }
 
 class TripStatus {
@@ -283,6 +297,7 @@ class TripStatus {
     required this.realtimeAvailable,
     required this.fetchedAt,
     this.lastSeenAt,
+    this.undoableUntil,
   });
 
   final TripPhase phase;
@@ -303,4 +318,28 @@ class TripStatus {
   /// 특정 후 목격이 끊겨도 추적은 끊지 않기로 했으므로(오너 결정 2026-09-30) 화면이 "언제 기준
   /// 값인지" 말할 수 있어야 한다. 낡은 숫자를 현재처럼 보여주면 조용히 틀리는 것과 같다 (NFR-03)
   final String? lastSeenAt;
+
+  /// "내렸어요"를 되돌릴 수 있는 마감 시각(ISO, v0.11 추가) — 없으면 null.
+  /// 이 값이 있는 동안만 "아직 안 내렸어요" 보조 버튼을 보인다(API.md §9-3)
+  final String? undoableUntil;
+}
+
+/// 하차역 2정거장 이내(TRACKING·ARRIVING)일 때만 "내렸어요"를 받는다 (API.md §9-3 v0.11) —
+/// 그 밖은 서버가 400을 주므로 버튼도 그 조건에서만 보인다
+bool canAlightNow(TripStatus status) {
+  if (status.phase != TripPhase.tracking && status.phase != TripPhase.arriving) {
+    return false;
+  }
+  final remaining = status.remainingStops;
+  return remaining != null && remaining <= 2;
+}
+
+/// "아직 안 내렸어요" 보조 버튼을 지금 보여줄 수 있는가 — [undoableUntil]이 있고 아직
+/// 지나지 않았을 때만 (API.md §9-3 v0.11). 파싱 실패(형식 오류)는 되돌릴 수 없다고 본다
+bool canUndoAlightAt(String? undoableUntil, DateTime now) {
+  if (undoableUntil == null) {
+    return false;
+  }
+  final deadline = DateTime.tryParse(undoableUntil);
+  return deadline != null && now.isBefore(deadline);
 }

@@ -18,7 +18,10 @@ import io.flutter.plugin.common.MethodChannel
  *
  * 갱신은 무음(setOnlyAlertOnce) — 소리·진동이 나는 하차 임박 알림은 서버 FCM(§9-4)의 몫.
  * 알림 권한(Android 13+)이 없으면 조용히 표시되지 않을 뿐, 트립 흐름은 계속된다.
- * v1 한계는 iOS와 동일: 앱이 살아 있는 동안만 갱신된다.
+ *
+ * v0.12(§9-5): [updateFromPush]로 [TripSurfaceFcmService]가 `TRIP_SURFACE` 데이터 메시지를
+ * Flutter 엔진 없이 직접 반영한다 — MethodChannel(Flutter → 여기)과 같은 값 계약을 쓰되
+ * 호출 경로만 다르다. 폴링(MethodChannel)과 원격 갱신(FCM) 둘 다 같은 알림 id를 갱신한다.
  */
 object TripNotificationBridge {
 
@@ -62,6 +65,27 @@ object TripNotificationBridge {
                 result.success(false)
             }
         }
+    }
+
+    /**
+     * §9-5 v0.12 — [TripSurfaceFcmService]가 `TRIP_SURFACE` 데이터 메시지로 직접 부른다.
+     * `start`를 거치지 않았어도(앱이 완전히 죽어 있다가 처음 받는 메시지) 알림을 띄울 수 있게
+     * [journeyLabel]은 모르면 기존 저장값(기본 문구)을 그대로 쓴다. 소리·진동 없음(§9-5 "무음").
+     */
+    fun updateFromPush(
+        context: Context,
+        tripId: String?,
+        phase: String,
+        eventStop: String,
+        remainingStops: Int?,
+        currentStop: String?,
+    ) {
+        if (tripId != null) this.tripId = tripId
+        show(
+            context,
+            title = statusLine(phase, eventStop, remainingStops),
+            text = currentLine(phase, currentStop) ?: journeyLabel,
+        )
     }
 
     private fun statusLine(phase: String, eventStop: String, remaining: Int?): String = when (phase) {

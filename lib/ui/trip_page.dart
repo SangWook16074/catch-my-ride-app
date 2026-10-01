@@ -15,6 +15,7 @@ import '../platform/location.dart';
 import 'components/ad_banner.dart';
 import 'components/route_strip.dart';
 import 'components/save_journey_sheet.dart';
+import 'components/switch_leg_sheet.dart';
 import 'components/trip_location_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/sheet.dart';
@@ -54,6 +55,18 @@ class _TripPageState extends State<TripPage> {
   /// "내가 탄 열차가 아니에요" 진행 중 — 연타로 되돌리기 횟수를 낭비하지 않게 잠근다 (§9-3)
   bool _reIdentifying = false;
 
+  /// 구간 바꾸기 진행 중 (§9-3 v0.10) — 연타로 한도를 낭비하지 않게 잠근다
+  bool _switchingLeg = false;
+
+  /// "내렸어요" 진행 중 (§9-3 v0.11)
+  bool _alighting = false;
+
+  /// "아직 안 내렸어요" 진행 중 (§9-3 v0.11)
+  bool _undoingAlight = false;
+
+  /// "아직 안 내렸어요" 버튼이 마감 시각에 저절로 숨도록 거는 1회성 타이머 (§9-3 v0.11)
+  Timer? _undoHideTimer;
+
   /// 1회성 트립을 완료 후 여정으로 저장했으면 그 라벨 — 저장 버튼을 안내로 바꾼다 (FR-708)
   String? _savedLabel;
 
@@ -83,12 +96,20 @@ class _TripPageState extends State<TripPage> {
         legs: widget.legs,
       ),
     );
+    // begin()의 알림이 이 위젯이 생기기 전에 이미 지나갔을 수 있다(시작 직후 바로 push하는
+    // 흔한 경로) — 첫 프레임 뒤에 한 번 더 확인해 시작 구간 안내를 놓치지 않는다 (§9-2 v0.10)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _checkLegIndexNotice();
+      }
+    });
   }
 
   @override
   void dispose() {
     // 폴링은 멈추지 않는다 — 화면을 닫아도 탭 카드·잠금화면은 계속 갱신돼야 한다
     _trip.removeListener(_onTripChanged);
+    _undoHideTimer?.cancel();
     super.dispose();
   }
 
@@ -109,7 +130,47 @@ class _TripPageState extends State<TripPage> {
       HapticFeedback.heavyImpact();
     }
     _lastPhase = phase;
+    _checkLegIndexNotice();
+    _scheduleUndoHide(activeTrip.status?.undoableUntil);
     setState(() {});
+  }
+
+  /// 시작 구간 판정(§9-2 v0.10)이 0이 아니면 구간 이름을 알 수 있게 되는 순간 1회 안내.
+  /// 구간을 아직 모르면(저장 여정 조회가 늦는 경우) 다음 상태 변화 때 다시 시도한다
+  void _checkLegIndexNotice() {
+    final pending = activeTrip.pendingLegIndexNotice;
+    if (pending == null) {
+      return;
+    }
+    final legs = _legs;
+    if (legs == null || pending < 0 || pending >= legs.length) {
+      return;
+    }
+    activeTrip.clearLegIndexNotice();
+    final leg = legs[pending];
+    _showMessage('안내를 시작해요', '${leg.boardStop} → ${leg.alightStop} 구간부터 안내할게요');
+  }
+
+  /// "아직 안 내렸어요" 버튼이 마감 시각에 저절로 사라지게 — 값이 바뀔 때마다 다시 건다
+  void _scheduleUndoHide(String? undoableUntil) {
+    _undoHideTimer?.cancel();
+    _undoHideTimer = null;
+    if (undoableUntil == null) {
+      return;
+    }
+    final deadline = DateTime.tryParse(undoableUntil);
+    if (deadline == null) {
+      return;
+    }
+    final wait = deadline.difference(DateTime.now());
+    if (wait.isNegative) {
+      return;
+    }
+    _undoHideTimer = Timer(wait, () {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   Future<void> _advanceLeg() async {
@@ -176,6 +237,120 @@ class _TripPageState extends State<TripPage> {
     }
   }
 
+  /// 구간 바꾸기 시트를 열고, 고르면 그 구간으로 전환한다 (§9-3 v0.10, 오너 결정 2026-10-01).
+  /// 시작 구간 자동 판정이 틀렸거나 좌표 없이 0번 구간에 묶였을 때의 출구 — 고른 구간 안에서
+  /// 중간 시작 판정을 다시 하므로 시작과 같은 권한 게이트·측위 1회를 거친다
+  Future<void> _openSwitchLeg() async {
+    if (_switchingLeg) {
+      return;
+    }
+    final legs = _legs;
+    final status = _status;
+    if (legs == null || legs.length < 2 || status == null) {
+      return;
+    }
+    final picked = await showSwitchLegSheet(
+      context,
+      legs: legs,
+      currentLegIndex: status.legIndex,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    if (!await ensureTripLocationOrGuide(context) || !mounted) {
+      return;
+    }
+    setState(() => _switchingLeg = true);
+    HapticFeedback.mediumImpact();
+    try {
+      final newStatus = await switchTripLeg(widget.tripId, picked);
+      activeTrip.apply(newStatus);
+    } on TripLocationPermissionRequired catch (denied) {
+      if (mounted) {
+        unawaited(showTripLocationRequiredSheet(context, denied.permission));
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        // 트립당 3회 한도 초과 등 — 서버 메시지를 그대로("다시 시작해주세요")
+        _showMessage('구간을 바꿀 수 없어요', error.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('구간을 바꿀 수 없어요', '네트워크를 확인하고 다시 시도해주세요');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _switchingLeg = false);
+      }
+    }
+  }
+
+  /// "내렸어요" (§9-3 v0.11, 오너 결정 2026-10-01) — 상류 지연으로 화면이 한 정거장쯤
+  /// 뒤처져도 유저가 서버를 기다리지 않게 한다. 환승 구간이면 곧바로 다음 구간이 시작되므로
+  /// 시작과 같은 측위 1회가 필요하다(권한 거부면 막지 않고 시작처럼 안내 시트로 유도)
+  Future<void> _alight() async {
+    if (_alighting) {
+      return;
+    }
+    final status = _status;
+    if (status == null) {
+      return;
+    }
+    final legs = _legs;
+    final isLastLeg = legs != null && status.legIndex >= legs.length - 1;
+    setState(() => _alighting = true);
+    HapticFeedback.mediumImpact();
+    try {
+      final newStatus = await alightTrip(widget.tripId, isLastLeg: isLastLeg);
+      activeTrip.apply(newStatus);
+    } on TripLocationPermissionRequired catch (denied) {
+      if (mounted) {
+        unawaited(showTripLocationRequiredSheet(context, denied.permission));
+      }
+    } on ApiException catch (error) {
+      // "아직 멀리 있어요" 등 — remainingStops가 늦게 바뀌어 버튼이 남아 있던 찰나
+      if (mounted) {
+        _showMessage('내린 걸로 처리할 수 없어요', error.message);
+        unawaited(activeTrip.refresh());
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('내린 걸로 처리할 수 없어요', '네트워크를 확인하고 다시 시도해주세요');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _alighting = false);
+      }
+    }
+  }
+
+  /// "아직 안 내렸어요" (§9-3 v0.11) — 실수로 "내렸어요"를 눌렀을 때 직전 구간을 그대로
+  /// 복원한다. 되돌리기는 서버가 보관해 둔 상태를 그대로 쓰므로 새 측위가 필요 없다
+  Future<void> _undoAlight() async {
+    if (_undoingAlight) {
+      return;
+    }
+    setState(() => _undoingAlight = true);
+    HapticFeedback.mediumImpact();
+    try {
+      final status = await undoAlightTrip(widget.tripId);
+      activeTrip.apply(status);
+    } on ApiException catch (error) {
+      // 마감 지남·한도 초과("이미 시간이 지나…", "다시 시작해주세요") — 서버 메시지 그대로
+      if (mounted) {
+        _showMessage('되돌릴 수 없어요', error.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('되돌릴 수 없어요', '네트워크를 확인하고 다시 시도해주세요');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _undoingAlight = false);
+      }
+    }
+  }
+
   /// 같은 구간으로 재시작할 수 있는가 — 저장 여정이거나 1회성 스냅숏이 있으면
   bool get _canRestart => widget.journeyId != null || widget.legs != null;
 
@@ -216,6 +391,7 @@ class _TripPageState extends State<TripPage> {
           label: widget.journeyLabel,
           journeyId: journeyId,
           legs: journeyId == null ? legs : null,
+          legIndex: start.legIndex,
         ),
       );
       if (!mounted) {
@@ -464,6 +640,16 @@ class _TripPageState extends State<TripPage> {
               ),
             ],
             const SizedBox(height: AppSpace.lg),
+            // "내렸어요" — 하차역 2정거장 이내일 때만 (§9-3 v0.11). 상류 지연·서버 틱·클라
+            // 폴링이 쌓여 화면이 뒤처져도 유저가 서버를 기다리지 않게 하는 출구
+            if (canAlightNow(status)) ...[
+              AppButton(
+                label: _alighting ? '처리하는 중…' : '내렸어요',
+                block: true,
+                onPressed: _alighting ? null : () => unawaited(_alight()),
+              ),
+              const SizedBox(height: AppSpace.md),
+            ],
             // 서버가 유저가 탄 열차가 아닌 차량을 잡았을 때의 출구 (§9-3 다시 잡기).
             // "현재 ○○ 부근"이 내 위치와 다르면 유저가 제일 먼저 알아챈다 (오너 요청 2026-09-30)
             AppButton(
@@ -472,6 +658,14 @@ class _TripPageState extends State<TripPage> {
               medium: true,
               onPressed: _reIdentifying ? null : () => unawaited(_reIdentify()),
             ),
+            if (_switchLegButton() case final switchButton?) ...[
+              const SizedBox(height: AppSpace.sm),
+              switchButton,
+            ],
+            if (_undoAlightButton(status) case final undoButton?) ...[
+              const SizedBox(height: AppSpace.sm),
+              undoButton,
+            ],
             const SizedBox(height: AppSpace.md),
             _footer(status),
           ],
@@ -485,13 +679,16 @@ class _TripPageState extends State<TripPage> {
             block: true,
             onPressed: () => unawaited(_advanceLeg()),
           ),
+          secondary: _switchLegButton(),
         );
       case TripPhase.done:
-        // 완료 버튼은 하단 액션 묶음(저장 행 옆)에 있다
+        // 완료 버튼은 하단 액션 묶음(저장 행 옆)에 있다. "내렸어요"로 끝낸 마지막 구간은
+        // undoableUntil이 지나기 전까지 이 화면에서도 되돌릴 수 있다 (§9-3 v0.11)
         return _message(
           title: '목적지에 도착했어요',
           subtitle: '오늘도 놓치지 않았어요. 수고했어요!',
           button: null,
+          secondary: _undoAlightButton(status),
         );
       case TripPhase.lost:
         // 서버가 재목격·재특정을 계속 시도한다 (§9-3) — 신호가 돌아오면 이 화면은 저절로 풀린다
@@ -514,6 +711,7 @@ class _TripPageState extends State<TripPage> {
     required String title,
     required String subtitle,
     required Widget? button,
+    Widget? secondary,
   }) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -526,7 +724,37 @@ class _TripPageState extends State<TripPage> {
           style: AppTypo.bodySm.copyWith(color: context.colors.inkMuted),
         ),
         if (button != null) ...[const SizedBox(height: AppSpace.lg), button],
+        if (secondary != null) ...[const SizedBox(height: AppSpace.md), secondary],
       ],
+    );
+  }
+
+  /// 구간 바꾸기 보조 액션 (§9-3 v0.10) — 구간이 2개 이상일 때만 노출
+  Widget? _switchLegButton() {
+    final legs = _legs;
+    if (legs == null || legs.length < 2) {
+      return null;
+    }
+    return AppButton(
+      label: _switchingLeg ? '구간을 바꾸는 중…' : '구간 바꾸기',
+      variant: AppButtonVariant.tonal,
+      medium: true,
+      onPressed: _switchingLeg ? null : () => unawaited(_openSwitchLeg()),
+    );
+  }
+
+  /// "아직 안 내렸어요" 보조 액션 (§9-3 v0.11) — undoableUntil이 있고 지나지 않았을 때만.
+  /// 마감 전엔 추적 중 화면·도착 화면 어디서든 뜰 수 있다("내렸어요"가 곧바로 다음 구간을
+  /// 시작하거나 트립을 끝내기 때문)
+  Widget? _undoAlightButton(TripStatus status) {
+    if (!canUndoAlightAt(status.undoableUntil, DateTime.now())) {
+      return null;
+    }
+    return AppButton(
+      label: _undoingAlight ? '되돌리는 중…' : '아직 안 내렸어요',
+      variant: AppButtonVariant.tonal,
+      medium: true,
+      onPressed: _undoingAlight ? null : () => unawaited(_undoAlight()),
     );
   }
 

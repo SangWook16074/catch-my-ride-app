@@ -286,10 +286,7 @@ class HttpNochijimaApi implements NochijimaApi {
     final json =
         await _send('POST', '/api/v1/journeys/$journeyId/trips', _fixBody(at))
             as Map<String, dynamic>;
-    return TripStart(
-      tripId: json['tripId'] as String,
-      startedAt: json['startedAt'] as String,
-    );
+    return _tripStartFromJson(json);
   }
 
   @override
@@ -300,10 +297,7 @@ class HttpNochijimaApi implements NochijimaApi {
               ...?_fixBody(at),
             })
             as Map<String, dynamic>;
-    return TripStart(
-      tripId: json['tripId'] as String,
-      startedAt: json['startedAt'] as String,
-    );
+    return _tripStartFromJson(json);
   }
 
   @override
@@ -324,12 +318,45 @@ class HttpNochijimaApi implements NochijimaApi {
             as Map<String, dynamic>,
       );
 
+  @override
+  Future<TripStatus> switchLeg(String tripId, int legIndex, {TripFix? at}) async =>
+      _tripStatusFromJson(
+        await _send('POST', '/api/v1/trips/$tripId/switch-leg', {
+              'legIndex': legIndex,
+              ...?_fixBody(at),
+            })
+            as Map<String, dynamic>,
+      );
+
+  @override
+  Future<TripStatus> alightTrip(String tripId, {TripFix? at}) async =>
+      _tripStatusFromJson(
+        await _send('POST', '/api/v1/trips/$tripId/alighted', _fixBody(at))
+            as Map<String, dynamic>,
+      );
+
+  @override
+  Future<TripStatus> undoAlight(String tripId) async => _tripStatusFromJson(
+    await _send('POST', '/api/v1/trips/$tripId/undo-alight')
+        as Map<String, dynamic>,
+  );
+
   /// §9-2 위치 필드 — 측위에 실패했으면 아예 보내지 않는다 (서버는 없으면 기존 동작)
   Map<String, dynamic>? _fixBody(TripFix? at) =>
       at == null ? null : {'location': at.toJson()};
 
   @override
   Future<void> endTrip(String tripId) => _send('DELETE', '/api/v1/trips/$tripId');
+
+  @override
+  Future<void> registerSurfaceToken(
+    String tripId,
+    String platform,
+    String token,
+  ) => _send('PUT', '/api/v1/trips/$tripId/surface-token', {
+    'platform': platform,
+    'token': token,
+  });
 }
 
 // ---- JSON ↔ domain 변환 ----
@@ -382,6 +409,14 @@ TripStatus _tripStatusFromJson(Map<String, dynamic> json) => TripStatus(
   realtimeAvailable: json['realtimeAvailable'] as bool? ?? true,
   fetchedAt: json['fetchedAt'] as String,
   lastSeenAt: json['lastSeenAt'] as String?, // 구버전 서버는 안 준다 — null 허용
+  undoableUntil: json['undoableUntil'] as String?, // v0.11 — 구버전 서버는 안 준다
+);
+
+/// §9-2 — `legIndex`는 v0.10 추가, 구버전 서버는 안 줄 수 있어 0으로 읽는다
+TripStart _tripStartFromJson(Map<String, dynamic> json) => TripStart(
+  tripId: json['tripId'] as String,
+  startedAt: json['startedAt'] as String,
+  legIndex: (json['legIndex'] as num?)?.toInt() ?? 0,
 );
 
 CommuteRoute _routeFromJson(Map<String, dynamic> json) => CommuteRoute(

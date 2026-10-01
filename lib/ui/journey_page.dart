@@ -194,6 +194,7 @@ class _JourneyPageState extends State<JourneyPage> {
           tripId: start.tripId,
           label: journeyPathSummary(route.legs),
           legs: route.legs,
+          legIndex: start.legIndex,
         ),
       );
       unawaited(_recentStore.push(route.legs));
@@ -255,6 +256,7 @@ class _JourneyPageState extends State<JourneyPage> {
           tripId: start.tripId,
           label: journey.label,
           journeyId: journey.id,
+          legIndex: start.legIndex,
         ),
       );
       if (!mounted) {

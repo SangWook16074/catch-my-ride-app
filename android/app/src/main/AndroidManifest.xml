@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 출발지 1회 등록(FR-101)용 — 위치 상시 추적 금지(NFR-05), 포그라운드 1회 조회만 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
@@ -39,6 +40,21 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713" />
+        <!-- 진행 표면 원격 갱신(§9-5 v0.12) — firebase_messaging 플러그인의 기본
+             FlutterFirebaseMessagingService는 제거하고(앱당 FirebaseMessagingService는
+             하나만 바인딩된다) 그걸 상속한 TripSurfaceFcmService로 교체한다. TRIP_SURFACE가
+             아닌 메시지는 super.onMessageReceived로 넘겨 플러그인 기본 동작을 그대로 쓴다
+             (TripSurfaceFcmService.kt 주석 참조). -->
+        <service
+            android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".TripSurfaceFcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

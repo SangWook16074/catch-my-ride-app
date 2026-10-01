@@ -44,3 +44,18 @@ Future<TripStatus> advanceTrip(String tripId) async =>
 /// 이미 몇 정거장 갔으니 탑승역 전광판으로는 다시 잡을 수 없다 (오너 요청 2026-09-30)
 Future<TripStatus> reIdentifyTrip(String tripId) async =>
     api.reIdentifyTrip(tripId, at: await tripFixProvider());
+
+/// 구간 바꾸기 (§9-3 v0.10, 오너 결정 2026-10-01) — 시작 구간 자동 판정이 틀렸거나 좌표
+/// 없이 0번 구간에 묶였을 때의 출구. 고른 구간 안에서 중간 시작 판정을 다시 하므로 시작과
+/// 같은 권한 게이트·측위 1회를 거친다
+Future<TripStatus> switchTripLeg(String tripId, int legIndex) async =>
+    api.switchLeg(tripId, legIndex, at: await tripFixProvider());
+
+/// "내렸어요" (§9-3 v0.11, 오너 결정 2026-10-01). 환승 구간이면 곧바로 다음 구간이 시작되므로
+/// 시작과 같은 측위 1회가 필요하다 — [isLastLeg]면 트립이 그대로 끝나 위치가 필요 없다
+Future<TripStatus> alightTrip(String tripId, {required bool isLastLeg}) async =>
+    api.alightTrip(tripId, at: isLastLeg ? null : await tripFixProvider());
+
+/// "아직 안 내렸어요" (§9-3 v0.11) — 직전 구간을 보관해 둔 그대로 복원하므로 새 측위가
+/// 필요 없다(권한 게이트도 거치지 않는다 — 이미 추적 중이던 트립을 되돌릴 뿐이다)
+Future<TripStatus> undoAlightTrip(String tripId) => api.undoAlight(tripId);

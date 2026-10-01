@@ -522,6 +522,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           tripId: start.tripId,
           label: journey.label,
           journeyId: journey.id,
+          legIndex: start.legIndex,
         ),
       );
       if (!mounted) {

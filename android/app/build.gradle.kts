@@ -49,3 +49,13 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // §9-5 v0.12 — TripSurfaceFcmService(진행 표면 원격 갱신)가 firebase_messaging 플러그인의
+    // FlutterFirebaseMessagingService를 상속하려면 com.google.firebase.messaging.* 심볼이
+    // app 모듈 클래스패스에도 있어야 한다(플러그인 서브모듈의 `implementation` 의존성은 app에
+    // 전이되지 않는다). 버전은 firebase_core 플러그인의 기본 FirebaseSDKVersion과 맞춘다 —
+    // firebase_core를 업그레이드하면 이 버전도 같이 맞출 것.
+    implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
+    implementation("com.google.firebase:firebase-messaging")
+}

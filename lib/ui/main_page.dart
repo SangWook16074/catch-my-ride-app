@@ -265,6 +265,7 @@ class _MainPageState extends State<MainPage> {
           tripId: start.tripId,
           label: journey.label,
           journeyId: journey.id,
+          legIndex: start.legIndex,
         ),
       );
       if (!mounted) {

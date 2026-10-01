@@ -285,6 +285,120 @@ void main() {
     expect(status.remainingStops, isNull); // 초기화 — 낡은 카운트를 이어 쓰지 않는다
   });
 
+  // API.md §9-2 v0.10 — 시작 구간 판정. 없으면(구버전 서버) 0으로 읽는다
+  test('트립 시작 응답의 legIndex를 읽는다 (§9-2 v0.10)', () async {
+    final api = _api(
+      (request) async => _json({
+        'tripId': 't-10',
+        'startedAt': '2026-10-01T08:00:00+09:00',
+        'legIndex': 1,
+      }, 201),
+    );
+    final start = await api.startTrip('j-1');
+    expect(start.legIndex, 1);
+  });
+
+  test('legIndex가 없는 구버전 서버 응답은 0으로 읽는다', () async {
+    final api = _api(
+      (request) async => _json({
+        'tripId': 't-11',
+        'startedAt': '2026-10-01T08:00:00+09:00',
+      }, 201),
+    );
+    final start = await api.startTrip('j-1');
+    expect(start.legIndex, 0);
+  });
+
+  // API.md §9-3 v0.10 — 구간 바꾸기
+  test('구간 바꾸기 — legIndex·location을 싣는다 (§9-3 v0.10)', () async {
+    final api = _api((request) async {
+      expect(request.url.path, '/api/v1/trips/t-20/switch-leg');
+      expect(jsonDecode(request.body), {
+        'legIndex': 2,
+        'location': {'lat': 37.5, 'lng': 127.0},
+      });
+      return _json({
+        'phase': 'TRACKING',
+        'legIndex': 2,
+        'remainingStops': null,
+        'currentStop': null,
+        'eventStop': '교대',
+        'realtimeAvailable': true,
+        'fetchedAt': '2026-10-01T08:00:00+09:00',
+      });
+    });
+    final status = await api.switchLeg(
+      't-20',
+      2,
+      at: const TripFix(point: GeoPoint(latitude: 37.5, longitude: 127.0)),
+    );
+    expect(status.legIndex, 2);
+  });
+
+  // API.md §9-3 v0.11 — "내렸어요"·되돌리기
+  test('내렸어요 — undoableUntil을 파싱한다 (§9-3 v0.11)', () async {
+    final api = _api((request) async {
+      expect(request.url.path, '/api/v1/trips/t-30/alighted');
+      return _json({
+        'phase': 'TRACKING',
+        'legIndex': 1,
+        'remainingStops': null,
+        'currentStop': null,
+        'eventStop': '강남',
+        'realtimeAvailable': true,
+        'fetchedAt': '2026-10-01T08:00:00+09:00',
+        'undoableUntil': '2026-10-01T08:05:00+09:00',
+      });
+    });
+    final status = await api.alightTrip('t-30');
+    expect(status.undoableUntil, '2026-10-01T08:05:00+09:00');
+  });
+
+  test('undoableUntil이 없는 응답은 null로 읽는다(구버전 서버)', () async {
+    final api = _api(
+      (request) async => _json({
+        'phase': 'TRACKING',
+        'legIndex': 0,
+        'remainingStops': 2,
+        'currentStop': null,
+        'eventStop': '당산',
+        'realtimeAvailable': true,
+        'fetchedAt': '2026-10-01T08:00:00+09:00',
+      }),
+    );
+    final status = await api.getTrip('t-31');
+    expect(status.undoableUntil, isNull);
+  });
+
+  test('아직 안 내렸어요 — 바디 없이 보낸다', () async {
+    final api = _api((request) async {
+      expect(request.url.path, '/api/v1/trips/t-40/undo-alight');
+      expect(request.body, isEmpty);
+      return _json({
+        'phase': 'TRACKING',
+        'legIndex': 0,
+        'remainingStops': 1,
+        'currentStop': null,
+        'eventStop': '당산',
+        'realtimeAvailable': true,
+        'fetchedAt': '2026-10-01T08:00:00+09:00',
+      });
+    });
+    final status = await api.undoAlight('t-40');
+    expect(status.remainingStops, 1);
+  });
+
+  // API.md §9-5 v0.12 — 진행 표면 원격 갱신 토큰 등록
+  test('표면 토큰 등록 — PUT에 platform·token을 싣는다 (§9-5 v0.12)', () async {
+    final api = _api((request) async {
+      expect(request.method, 'PUT');
+      expect(request.url.path, '/api/v1/trips/t-50/surface-token');
+      expect(jsonDecode(request.body), {'platform': 'IOS', 'token': 'abc123'});
+      return http.Response('', 204);
+    });
+    await api.registerSurfaceToken('t-50', 'IOS', 'abc123');
+  });
+
   test('1회성 트립도 구간과 함께 위치를 싣는다 (FR-708)', () async {
     final api = _api((request) async {
       expect(request.url.path, '/api/v1/trips');

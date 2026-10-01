@@ -214,4 +214,73 @@ void main() {
       expect(pickBoardingJourney(const [], tuesday), isNull);
     });
   });
+
+  group('canAlightNow (§9-3 v0.11)', () {
+    TripStatus status({
+      required TripPhase phase,
+      int? remainingStops,
+    }) => TripStatus(
+      phase: phase,
+      legIndex: 0,
+      remainingStops: remainingStops,
+      currentStop: null,
+      eventStop: '당산',
+      realtimeAvailable: true,
+      fetchedAt: '2026-10-01T08:00:00+09:00',
+    );
+
+    test('TRACKING·ARRIVING + remainingStops <= 2만 허용', () {
+      expect(
+        canAlightNow(status(phase: TripPhase.tracking, remainingStops: 2)),
+        isTrue,
+      );
+      expect(
+        canAlightNow(status(phase: TripPhase.arriving, remainingStops: 1)),
+        isTrue,
+      );
+      expect(
+        canAlightNow(status(phase: TripPhase.tracking, remainingStops: 3)),
+        isFalse,
+      );
+    });
+
+    test('위치 확인 중(remainingStops null)이면 거부 — 숫자를 지어내지 않는다', () {
+      expect(
+        canAlightNow(status(phase: TripPhase.tracking, remainingStops: null)),
+        isFalse,
+      );
+    });
+
+    test('TRANSFER·DONE·LOST는 거부', () {
+      for (final phase in [TripPhase.transfer, TripPhase.done, TripPhase.lost]) {
+        expect(canAlightNow(status(phase: phase, remainingStops: 1)), isFalse);
+      }
+    });
+  });
+
+  group('canUndoAlightAt (§9-3 v0.11)', () {
+    final now = DateTime(2026, 10, 1, 8, 0);
+
+    test('마감 전이면 true', () {
+      expect(
+        canUndoAlightAt('2026-10-01T08:05:00+09:00', DateTime(2026, 10, 1, 8, 4)),
+        isTrue,
+      );
+    });
+
+    test('마감이 지났으면 false', () {
+      expect(
+        canUndoAlightAt('2026-10-01T08:05:00+09:00', DateTime(2026, 10, 1, 8, 6)),
+        isFalse,
+      );
+    });
+
+    test('null이면 false', () {
+      expect(canUndoAlightAt(null, now), isFalse);
+    });
+
+    test('형식 오류면 되돌릴 수 없다고 본다', () {
+      expect(canUndoAlightAt('not-a-date', now), isFalse);
+    });
+  });
 }

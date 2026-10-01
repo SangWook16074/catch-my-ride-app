@@ -27,7 +27,16 @@ const Duration tripPollInterval = Duration(seconds: 20);
 const String defaultTripLabel = '하차 알림';
 
 class ActiveTripController extends ChangeNotifier {
-  ActiveTripController();
+  ActiveTripController() {
+    // iOS Live Activity push token(§9-5 v0.12) — 트립이 있는 동안 계속 구독해 토큰 회전도
+    // 놓치지 않는다. Android는 네이티브가 이 이벤트를 보내지 않는다
+    _liveActivity.pushTokenUpdates.listen((token) {
+      final tripId = _tripId;
+      if (tripId != null) {
+        unawaited(_registerSurfaceToken(tripId, token));
+      }
+    });
+  }
 
   final TripStore _store = TripStore();
   final LiveActivityBridge _liveActivity = LiveActivityBridge();
@@ -39,6 +48,13 @@ class ActiveTripController extends ChangeNotifier {
   String _label = defaultTripLabel;
   bool _stale = false;
   bool _gone = false;
+
+  /// 시작 구간 판정(§9-2 v0.10) — `begin()`으로 막 시작했고 0번이 아니면 1회 안내 대상.
+  /// 이어보기(`adopt`)·복원(`restore`)에서는 세우지 않는다(새로 시작했을 때만 1회)
+  int? _pendingLegIndexNotice;
+
+  /// 잠금화면 표면 채널에 마지막으로 보낸 값(§9-5 v0.12 — 낡은 재전송 억제용)
+  (String, int?, TripPhase, String?)? _lastSentSurfaceKey;
 
   Timer? _timer;
   AppLifecycleListener? _lifecycle;
@@ -74,6 +90,14 @@ class ActiveTripController extends ChangeNotifier {
 
   /// 1회성 트립인가 — 여정 없이 스냅숏으로 시작한 트립 (완료 후 저장 제안 대상)
   bool get isOneOff => _journeyId == null && _legs != null;
+
+  /// 시작 구간 판정이 0이 아니면(§9-2 v0.10) 보여줄 1회 안내 — 보여줄 수 있을 때
+  /// (구간 목록을 알 때) [clearLegIndexNotice]로 지운다. 소비 전엔 계속 같은 값을 돌려준다
+  int? get pendingLegIndexNotice => _pendingLegIndexNotice;
+
+  void clearLegIndexNotice() {
+    _pendingLegIndexNotice = null;
+  }
 
   /// 이동 중 구간(탑승역→하차역) — 카드의 구간 스트립용. 이동 중이고 구간을 알 때만
   JourneyLeg? get currentLeg {
@@ -123,6 +147,7 @@ class ActiveTripController extends ChangeNotifier {
     _status = null;
     _stale = false;
     _gone = false;
+    _lastSentSurfaceKey = null;
     _journeyId = journeyId;
     _legs = legs;
     notifyListeners();
@@ -139,6 +164,7 @@ class ActiveTripController extends ChangeNotifier {
     required String label,
     String? journeyId,
     List<JourneyLeg>? legs,
+    int legIndex = 0,
   }) async {
     _generation++;
     _tripId = tripId;
@@ -148,6 +174,9 @@ class ActiveTripController extends ChangeNotifier {
     _status = null;
     _stale = false;
     _gone = false;
+    _lastSentSurfaceKey = null;
+    // 시작 구간 판정(§9-2 v0.10) — 0이 아니면 "○○ → ○○ 구간부터 안내할게요" 1회 안내 대상
+    _pendingLegIndexNotice = legIndex > 0 ? legIndex : null;
     notifyListeners();
     unawaited(_store.write(tripId, journeyId: journeyId, legs: legs));
     // 잠금화면 표면 시작 (FR-705) — 미지원 기기는 조용히 무시된다
@@ -203,6 +232,7 @@ class ActiveTripController extends ChangeNotifier {
     _status = null;
     _stale = false;
     _gone = false;
+    _lastSentSurfaceKey = null;
     notifyListeners();
     unawaited(_liveActivity.start(_label, tripId: tripId));
     _ensurePolling();
@@ -257,7 +287,19 @@ class ActiveTripController extends ChangeNotifier {
     _status = status;
     _stale = false;
     _gone = false;
-    unawaited(_liveActivity.update(status));
+    // v0.12 — 서버가 §9-5로 표면을 직접 갱신할 수 있어, Dart는 그 값을 모른 채 폴링한다.
+    // 완전한 최신성 비교는 못 하지만, 적어도 "똑같은 값을 또 보내는" 낡은 재전송은 줄인다 —
+    // 마지막으로 이 채널에 보낸 값과 같으면 다시 보내지 않는다 (CLAUDE.md 위젯 데이터 계약 참조)
+    final surfaceKey = (
+      status.eventStop,
+      status.remainingStops,
+      status.phase,
+      status.currentStop,
+    );
+    if (surfaceKey != _lastSentSurfaceKey) {
+      _lastSentSurfaceKey = surfaceKey;
+      unawaited(_liveActivity.update(status));
+    }
     _ensurePolling();
     notifyListeners();
   }
@@ -332,7 +374,19 @@ class ActiveTripController extends ChangeNotifier {
     _label = defaultTripLabel;
     _stale = false;
     _gone = false;
+    _pendingLegIndexNotice = null;
+    _lastSentSurfaceKey = null;
     _stopPolling();
+  }
+
+  /// §9-5 v0.12 — iOS Live Activity push token을 서버에 등록. 실패해도 폴링이 보조하므로
+  /// 조용히 무시(다음 토큰 회전이나 폴링에서 따라잡는다)
+  Future<void> _registerSurfaceToken(String tripId, String token) async {
+    try {
+      await api.registerSurfaceToken(tripId, 'IOS', token);
+    } catch (_) {
+      // 토큰 만료·트립 종료(404) 등 — 부가 기능이라 트립 본편에 영향 없음
+    }
   }
 
   /// 트립이 살아 있고 보는 화면이 있는 동안만 폴링한다 — 종착 상태는 타이머를 걷는다.

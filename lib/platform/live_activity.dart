@@ -5,7 +5,10 @@
 /// Android = 잠금화면 지속(ongoing) 알림(`TripNotificationBridge.kt`) — 같은 채널·계약.
 /// 미지원 환경·설정 꺼짐·테스트는 조용히 무시된다 (부가 기능이 트립 본편을 막지 않는다).
 /// 갱신 값은 트립 폴링(§9-3)이 공급 — 표면은 표시만 (ADR-001).
-/// 한계(v1): 앱이 살아 있는 동안만 갱신된다 — 서버 푸시 갱신은 후속.
+/// v0.12부터 서버가 상태 변화 시 직접 갱신한다(§9-5) — 클라 폴링은 앱이 앞에 있을 때의 보조로
+/// 남는다. iOS는 Live Activity push token을 이 채널로 **역방향** 전달받아(네이티브 →
+/// Flutter) `data/active_trip.dart`가 서버에 등록한다 — 토큰 등록 오케스트레이션은
+/// data 레이어 몫이라 여기는 스트림만 내보낸다(CLAUDE.md 레이어 규칙).
 library;
 
 import 'dart:async';
@@ -19,6 +22,30 @@ class LiveActivityBridge {
   static const MethodChannel _channel = MethodChannel(
     'catchmyride/live_activity',
   );
+
+  LiveActivityBridge() {
+    if (Platform.isIOS) {
+      _channel.setMethodCallHandler(_handleCall);
+    }
+  }
+
+  final StreamController<String> _pushTokenController =
+      StreamController<String>.broadcast();
+
+  /// iOS Live Activity push token(hex) — `Activity.request(pushType: .token)` 직후,
+  /// 이후 `pushTokenUpdates`(회전 포함)마다 네이티브가 `pushTokenUpdated`로 올려준다 (§9-5 v0.12).
+  /// Android는 호출되지 않는다(§4-1 FCM 토큰을 그대로 쓴다)
+  Stream<String> get pushTokenUpdates => _pushTokenController.stream;
+
+  Future<dynamic> _handleCall(MethodCall call) async {
+    if (call.method == 'pushTokenUpdated') {
+      final token = call.arguments as String?;
+      if (token != null && token.isNotEmpty) {
+        _pushTokenController.add(token);
+      }
+    }
+    return null;
+  }
 
   /// tripId는 Android 알림 탭 딥링크(catchmyride://trip?tripId=…)용 — iOS는 무시
   Future<void> start(String journeyLabel, {required String tripId}) =>

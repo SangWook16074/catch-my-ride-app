@@ -88,8 +88,29 @@ abstract interface class NochijimaApi {
   /// 환승 대기·완료 상태이거나 구간당 3회를 넘기면 400
   Future<TripStatus> reIdentifyTrip(String tripId, {TripFix? at});
 
+  /// §9-3 — 구간 바꾸기(v0.10, 오너 결정 2026-10-01): 시작 구간 자동 판정이 틀렸거나 좌표
+  /// 없이 0번 구간에 묶였을 때의 출구. [legIndex]는 0 이상 구간 수 미만이어야 하고 현재
+  /// 구간과 같으면 400. [at]은 시작과 같은 의미(고른 구간 안에서 중간 시작 판정).
+  /// `DONE`이면 400, 트립당 3회(`maxSwitchLegCount`)를 넘기면 400("다시 시작해주세요")
+  Future<TripStatus> switchLeg(String tripId, int legIndex, {TripFix? at});
+
+  /// §9-3 — "내렸어요"(v0.11, 오너 결정 2026-10-01). `TRACKING`·`ARRIVING`이고
+  /// `remainingStops <= 2`일 때만 받는다(그 밖은 400). 환승 구간이면 곧바로 다음 구간을
+  /// 시작하고, 마지막 구간이면 `DONE`. 되돌릴 수 있게 `undoableUntil`(+5분)을 채운다
+  Future<TripStatus> alightTrip(String tripId, {TripFix? at});
+
+  /// §9-3 — "아직 안 내렸어요"(v0.11): `alighted`를 실수로 눌렀을 때 직전 구간을 그대로
+  /// 복원한다. `undoableUntil`이 없거나 지났으면 400, 트립당 2회(`maxUndoAlightCount`)를
+  /// 넘기면 400
+  Future<TripStatus> undoAlight(String tripId);
+
   /// §9-3 — 트립 종료 (완료·취소 공용, 멱등)
   Future<void> endTrip(String tripId);
+
+  /// §9-5 — 진행 표면(Live Activity·잠금화면 알림) 원격 갱신용 토큰 등록(v0.12).
+  /// iOS만 호출한다(`platform: "IOS"`) — Android는 §4-1 FCM 토큰을 그대로 쓴다.
+  /// 트립이 `DONE`·삭제면 404(무시해도 된다)
+  Future<void> registerSurfaceToken(String tripId, String platform, String token);
 }
 
 /// API.md 공통 Base URL — 지도 미리보기(§6) 이미지 URL도 여기서 만든다

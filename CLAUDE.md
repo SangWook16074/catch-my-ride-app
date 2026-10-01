@@ -79,9 +79,9 @@ lib/
 | geolocator 플러그인 (`lib/platform/location.dart`) | Flutter → OS | ① 온보딩 집 위치 1회 등록 (FR-101) ② 하차 알림 트립 시작 1회 측위 (API.md §9-2 "중간 시작" — 출발지를 이미 지나 탄 상태로 시작하면 서버가 좌표로 **타고 있는 열차**를 잡는다. 호출부는 `lib/data/trip_start.dart` 하나). **권한 거부·굳은 거부·기기 위치 꺼짐이면 트립을 시작하지 않고 허용으로 유도한다** — 시작 액션은 `ensureTripLocationOrGuide`(ui/components/trip_location_sheet.dart)를 먼저 통과하고(허용되면 그대로 진행), 게이트를 우회한 경로에서도 `requestTripFix`가 `TripLocationPermissionRequired`를 던져 서버를 부르지 않는다 (오너 결정 2026-09-30: 좌표 없는 시작 = 뒤차 추적이라 되는 척하지 않는다). 권한이 있는데 측위만 실패하면 좌표 없이 시작(서버가 탑승역 시드로 강등). 둘 다 1회성 — 상시 추적 금지(NFR-05) |
 | shared_preferences 플러그인 (`lib/data/suggestion_store.dart`, `lib/data/auth.dart`, `lib/data/trip_store.dart`, `lib/data/recent_routes_store.dart`) | Flutter → OS | 버퍼 추천 처리 시각·익명 키(§8-3)·진행 중 트립 id와 1회성 구간 스냅숏·최근 간 길(FR-708) 등 경량 로컬 저장 |
 | app_links 플러그인 (`lib/platform/deep_links.dart`) | OS → Flutter | 딥링크 수신 — `catchmyride://open?from=push&notifiedDate=…` (스킴: iOS Info.plist / Android manifest) |
-| firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link)·iOS 포그라운드 배너 표시(트립 중 하차·환승 푸시 §9-4). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart` |
+| firebase_core·firebase_messaging 플러그인 (`lib/platform/push.dart`) | 양방향 | FCM 푸시 — 권한 요청·토큰·알림 탭 딥링크(data.link)·iOS 포그라운드 배너 표시(트립 중 하차·환승 푸시 §9-4). 토큰 등록 오케스트레이션은 `lib/data/push_registrar.dart`. **v0.12**: Android는 플러그인의 기본 `FlutterFirebaseMessagingService` 대신 `TripSurfaceFcmService`(네이티브, `android/.../TripSurfaceFcmService.kt`)가 받는다 — `data.type == "TRIP_SURFACE"`(§9-5 진행 표면 원격 갱신)면 Flutter 엔진을 깨우지 않고 `TripNotificationBridge`와 같은 알림 id로 직접 갱신하고, 그 외(하차·환승 알림 §9-4 등)는 `super.onMessageReceived`로 넘겨 기존 플러그인 처리(배너·딥링크)를 그대로 태운다 — 매니페스트에서 기본 서비스 대신 이 서비스를 등록 |
 | package_info_plus 플러그인 (`lib/platform/app_info.dart`) | Flutter → OS | 앱 버전·빌드 번호 표시 (내정보 탭) |
-| `catchmyride/live_activity` MethodChannel (`lib/platform/live_activity.dart` ↔ iOS `LiveActivityBridge.swift` / Android `TripNotificationBridge.kt`) | Flutter → OS | 하차 알림 트립 잠금화면 표면 시작·갱신·종료 (FR-705) — iOS 16.1+ Live Activity, Android 지속(ongoing) 무음 알림(탭 = 트립 딥링크). 미지원은 조용히 무시 |
+| `catchmyride/live_activity` MethodChannel (`lib/platform/live_activity.dart` ↔ iOS `LiveActivityBridge.swift` / Android `TripNotificationBridge.kt`) | 양방향(v0.12부터) | 하차 알림 트립 잠금화면 표면 시작·갱신·종료 (FR-705) — iOS 16.1+ Live Activity, Android 지속(ongoing) 무음 알림(탭 = 트립 딥링크). 미지원은 조용히 무시. **v0.12**: §9-5 서버 원격 갱신(APNs 직접·Android FCM)을 위해 iOS는 `Activity.request(pushType: .token)`으로 시작하고 `pushTokenUpdates`를 구독해 활동 push token(hex)을 **네이티브 → Flutter** 방향으로 같은 채널에 `pushTokenUpdated` 메서드 호출로 올린다 — `lib/data/active_trip.dart`가 받아 `PUT /api/v1/trips/{id}/surface-token`을 부른다(값은 서버가 직접 밀어주므로 Dart `update` 호출은 이제 앱이 앞에 있을 때의 폴링 보조). Android는 이 역방향 콜백이 없다(위 FCM 행 참조) |
 | google_mobile_ads 플러그인 (`lib/platform/ads.dart`, 배너 위젯 `lib/ui/components/ad_banner.dart`) | Flutter → OS | AdMob 배너 — ADR-001 Platform View 허용 목록(광고). 각 탭 스크롤 콘텐츠 맨 아래(내정보 탭 제외, 메인 탭은 하차 알림·통근 기록 섹션 사이, 출발 알림 탭은 피드백 카드·도착 목록 사이) + 트립 진행 화면은 종료 버튼 위 MREC(300×250, 동영상 크리에이티브 가능). 화면 고정 플로팅 금지(2026-09-19)·온보딩 금지. ⚠️ 현재 테스트 ID — 실계정 발급 후 ads.dart + Manifest/Info.plist 교체 |
 
 ## 위젯·Live Activity 데이터 계약
@@ -102,7 +102,16 @@ lib/
   Android는 지속(ongoing) 무음 알림(`TripNotificationBridge.kt`, 탭 = `catchmyride://trip`
   딥링크). 두 쪽 다 같은 값(eventStop·remainingStops(null=위치 확인 중)·phase·currentStop(열차 현재 위치 역명, 모르면 null — 2026-09-21 추가))을 같은 채널로
   받고, 갱신 주체는 전역 트립 폴링(`lib/data/active_trip.dart`) — 표면은 표시만.
-  v1 한계: 앱이 살아 있는 동안만 갱신되며, 서버 푸시 갱신은 후속 작업.
+  **v0.12**: 서버가 상태 변화 시점에 직접 갱신한다(§9-5) — iOS는 APNs 활동 push token
+  (`Activity.request(pushType: .token)` + `pushTokenUpdates` → `PUT /trips/{id}/surface-token`),
+  Android는 §4-1 FCM 토큰으로 데이터 전용 메시지(`TripSurfaceFcmService`). 클라 폴링(20초)은
+  앱이 앞에 있을 때의 보조로 남는다 — 서버 원격 갱신은 네이티브가 직접 표면을 갱신해 Dart가
+  그 값을 모르므로, 완전한 최신성 비교(`fetchedAt`)는 못 한다. 대신 **낡은 폴링 값의 재전송만
+  줄인다**: `ActiveTripController`가 마지막으로 채널에 보낸 표면 값을 들고 있다가 같은 값이면
+  다시 보내지 않는다(`active_trip.dart` `apply()` 참조) — 완벽한 해법은 아니고, 서버가 더 최신
+  값을 이미 네이티브에 반영한 순간과 겹치는 드문 창에서는 폴링이 한 번 따라잡을 수 있다(다음
+  목격에서 다시 최신화되므로 치명적이지 않다). Info.plist `NSSupportsLiveActivitiesFrequentUpdates
+  = YES` 필요(역 이동도 우선순위 10 갱신이라서).
 - 필드를 바꾸면 이 절과 Extension 코드를 같은 커밋에서 갱신한다.
 
 ## 명령어

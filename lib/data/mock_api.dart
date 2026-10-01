@@ -610,7 +610,10 @@ class MockNochijimaApi implements NochijimaApi {
       legs: journey.legs,
       lastUsedAt: startedAt,
     );
-    return TripStart(tripId: _trip!.tripId, startedAt: startedAt);
+    // 시작 구간 판정(v0.10, §9-2) — 실서버는 좌표로 노선별 열차 후보를 돌려 판정하는데,
+    // mock은 역 좌표·실시간 위치 데이터가 없어 그 판정을 흉내낼 수 없다. 항상 0번 구간에서
+    // 시작(기존 동작)하고, 판정 그 자체는 switch-leg 쪽 400·한도 규칙으로 계약을 검증한다.
+    return TripStart(tripId: _trip!.tripId, startedAt: startedAt, legIndex: 0);
   }
 
   @override
@@ -633,6 +636,7 @@ class MockNochijimaApi implements NochijimaApi {
     return TripStart(
       tripId: _trip!.tripId,
       startedAt: DateTime.now().toIso8601String(),
+      legIndex: 0, // mock은 시작 구간 판정을 흉내내지 않는다 — 위 startTrip 주석 참조
     );
   }
 
@@ -690,11 +694,115 @@ class MockNochijimaApi implements NochijimaApi {
     return trip.status();
   }
 
+  /// §9-3 — 구간 바꾸기(v0.10). [legIndex]는 범위 안·현재와 달라야 하고, `DONE`이면 400,
+  /// 트립당 [maxSwitchLegCount]회를 넘기면 400("다시 시작해주세요"). 구간이 바뀌면 물린
+  /// 열차 목록·다시 잡기 횟수·발송 기록을 비운다(mock은 발송 기록을 모델링하지 않는다)
+  @override
+  Future<TripStatus> switchLeg(String tripId, int legIndex, {TripFix? at}) async {
+    final trip = _trip;
+    if (trip == null || trip.tripId != tripId) {
+      throw _notFound();
+    }
+    if (trip.status().phase == TripPhase.done) {
+      throw _invalid('이미 끝난 트립이에요');
+    }
+    if (legIndex < 0 || legIndex >= trip.legs.length) {
+      throw _invalid('구간 범위를 벗어났어요');
+    }
+    if (legIndex == trip.legIndex) {
+      throw _invalid('이미 그 구간을 추적하고 있어요');
+    }
+    if (trip.switchCount >= maxSwitchLegCount) {
+      throw _invalid('구간을 너무 여러 번 바꿨어요. 트립을 다시 시작해주세요');
+    }
+    trip.switchCount++;
+    trip.legIndex = legIndex;
+    trip.remainingStops = _mockLegStops;
+    trip.identified = false;
+    trip.reIdentifyCount = 0; // 구간이 바뀌면 물린 목록·다시 잡기 횟수도 비운다 (§9-3)
+    trip.alightSnapshot = null; // 바뀐 구간에는 이전 되돌리기가 의미 없다
+    trip.undoableUntil = null;
+    return trip.status();
+  }
+
+  /// §9-3 — "내렸어요"(v0.11). `TRACKING`·`ARRIVING` + `remainingStops <= 2`만 받는다.
+  /// 환승 구간이면 곧바로 다음 구간을 시작(next-leg와 동일 시드), 마지막 구간이면 `DONE`.
+  /// 되돌리기용으로 직전 구간 상태를 보관하고 `undoableUntil = now + 5분`을 채운다
+  @override
+  Future<TripStatus> alightTrip(String tripId, {TripFix? at}) async {
+    final trip = _trip;
+    if (trip == null || trip.tripId != tripId) {
+      throw _notFound();
+    }
+    final current = trip.status();
+    if (!canAlightNow(current)) {
+      throw _invalid('아직 하차역에 가까워지지 않았어요');
+    }
+    // 되돌리기용 스냅숏 — 하차 직전 구간 그대로
+    trip.alightSnapshot = _MockLegSnapshot(
+      legIndex: trip.legIndex,
+      remainingStops: trip.remainingStops,
+      identified: trip.identified,
+      reIdentifyCount: trip.reIdentifyCount,
+    );
+    trip.undoableUntil = DateTime.now().add(const Duration(minutes: 5));
+    final isLastLeg = trip.legIndex >= trip.legs.length - 1;
+    if (isLastLeg) {
+      trip.remainingStops = 0;
+      trip.identified = true;
+    } else {
+      // next-leg와 같은 시드 — 환승 없이 곧바로 다음 구간 TRACKING(위치 확인 중)부터
+      trip.legIndex++;
+      trip.remainingStops = _mockLegStops;
+      trip.identified = false;
+      trip.reIdentifyCount = 0;
+    }
+    return trip.status();
+  }
+
+  /// §9-3 — "아직 안 내렸어요"(v0.11). 스냅숏이 없거나 마감이 지났으면 400,
+  /// 트립당 [maxUndoAlightCount]회를 넘기면 400. 마지막 구간의 `DONE`도 마감 안이면 복원된다
+  @override
+  Future<TripStatus> undoAlight(String tripId) async {
+    final trip = _trip;
+    if (trip == null || trip.tripId != tripId) {
+      throw _notFound();
+    }
+    final snapshot = trip.alightSnapshot;
+    final deadline = trip.undoableUntil;
+    if (snapshot == null || deadline == null || DateTime.now().isAfter(deadline)) {
+      throw _invalid('이미 시간이 지나 되돌릴 수 없어요 — 구간 바꾸기를 써주세요');
+    }
+    if (trip.undoCount >= maxUndoAlightCount) {
+      throw _invalid('너무 여러 번 되돌렸어요. 다시 시작해주세요');
+    }
+    trip.undoCount++;
+    trip.legIndex = snapshot.legIndex;
+    trip.remainingStops = snapshot.remainingStops;
+    trip.identified = snapshot.identified;
+    trip.reIdentifyCount = snapshot.reIdentifyCount;
+    trip.alightSnapshot = null;
+    trip.undoableUntil = null;
+    return trip.status();
+  }
+
   @override
   Future<void> endTrip(String tripId) async {
     // 완료·취소 공용, 멱등 (§9-3) — 없는 트립도 에러 아님
     if (_trip?.tripId == tripId) {
       _trip = null;
+    }
+  }
+
+  /// §9-5 — mock은 발송하지 않는다. 트립이 없으면(삭제됨) 404로 강등
+  @override
+  Future<void> registerSurfaceToken(
+    String tripId,
+    String platform,
+    String token,
+  ) async {
+    if (_trip?.tripId != tripId) {
+      throw _notFound();
     }
   }
 }
@@ -722,6 +830,18 @@ class _MockTrip {
   /// "내가 탄 열차가 아니에요" 횟수 — 실서버와 같이 구간당 3회 제한 (§9-3)
   int reIdentifyCount = 0;
 
+  /// 구간 바꾸기 횟수 — 트립당 [maxSwitchLegCount]회 제한 (§9-3 v0.10)
+  int switchCount = 0;
+
+  /// "아직 안 내렸어요" 횟수 — 트립당 [maxUndoAlightCount]회 제한 (§9-3 v0.11)
+  int undoCount = 0;
+
+  /// "내렸어요" 직전 구간 상태 — 되돌리기용 보관 (§9-3 v0.11), 없으면 되돌릴 수 없다
+  _MockLegSnapshot? alightSnapshot;
+
+  /// "내렸어요"를 되돌릴 수 있는 마감 — 없으면 null (§9-3 v0.11)
+  DateTime? undoableUntil;
+
   TripStatus status() {
     final isLastLeg = legIndex >= legs.length - 1;
     final phase = !identified || remainingStops > 1
@@ -743,6 +863,22 @@ class _MockTrip {
       fetchedAt: DateTime.now().toIso8601String(),
       // 실서버 미러: 특정 후에만 목격 시각이 있다 (§9-3 lastSeenAt)
       lastSeenAt: identified ? DateTime.now().toIso8601String() : null,
+      undoableUntil: undoableUntil?.toIso8601String(),
     );
   }
+}
+
+/// "내렸어요" 직전 구간 상태 — undo-alight가 그대로 복원한다 (§9-3 v0.11)
+class _MockLegSnapshot {
+  const _MockLegSnapshot({
+    required this.legIndex,
+    required this.remainingStops,
+    required this.identified,
+    required this.reIdentifyCount,
+  });
+
+  final int legIndex;
+  final int remainingStops;
+  final bool identified;
+  final int reIdentifyCount;
 }

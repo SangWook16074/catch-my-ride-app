@@ -125,6 +125,127 @@ void main() {
     expect(() => api.getTrip(start.tripId), throwsA(isA<ApiException>()));
   });
 
+  // API.md §9-3 v0.10 — 구간 바꾸기
+  test('구간 바꾸기 — 범위·동일 값·한도·DONE 규칙 (§9-3 v0.10)', () async {
+    final journey = await api.createJourney(_request);
+    final start = await api.startTrip(journey.id);
+
+    // 범위 밖
+    expect(() => api.switchLeg(start.tripId, 2), throwsA(isA<ApiException>()));
+    expect(() => api.switchLeg(start.tripId, -1), throwsA(isA<ApiException>()));
+    // 현재 구간과 같은 값
+    expect(() => api.switchLeg(start.tripId, 0), throwsA(isA<ApiException>()));
+
+    // 뒤 구간으로 전환 — 초기화된 상태(위치 확인 중)
+    var status = await api.switchLeg(start.tripId, 1);
+    expect(status.phase, TripPhase.tracking);
+    expect(status.legIndex, 1);
+    expect(status.remainingStops, isNull);
+    expect(status.eventStop, '강남');
+
+    // 앞 구간으로도 바꿀 수 있다
+    status = await api.switchLeg(start.tripId, 0);
+    expect(status.legIndex, 0);
+
+    // 한도(3회) — 지금까지 2회 썼으니 1회만 더 가능
+    await api.switchLeg(start.tripId, 1);
+    expect(
+      () => api.switchLeg(start.tripId, 0),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.message,
+          'message',
+          contains('다시 시작'),
+        ),
+      ),
+    );
+  });
+
+  test('구간 바꾸기 — TRANSFER에서는 허용, DONE이면 400 (§9-3 v0.10)', () async {
+    final journey = await api.createJourney(_request);
+    final start = await api.startTrip(journey.id);
+    // TRANSFER까지 전진
+    await api.getTrip(start.tripId); // 특정
+    await api.getTrip(start.tripId); // 2
+    await api.getTrip(start.tripId); // 1(ARRIVING)
+    final transferStatus = await api.getTrip(start.tripId); // 0(TRANSFER)
+    expect(transferStatus.phase, TripPhase.transfer);
+
+    // TRANSFER에서도 구간을 바꿀 수 있다 — TRANSFER 중엔 legIndex가 아직 완료한 구간(0)을
+    // 가리키므로, 현재 값과 달라야 하는 규칙상 고를 수 있는 건 1번뿐이다
+    final status = await api.switchLeg(start.tripId, 1);
+    expect(status.legIndex, 1);
+    expect(status.phase, TripPhase.tracking); // 초기화된 상태(위치 확인 중)부터
+
+    // 마지막 구간까지 완주해 DONE으로 만든다
+    await api.getTrip(start.tripId); // 특정
+    await api.getTrip(start.tripId); // 2
+    await api.getTrip(start.tripId); // 1
+    final doneStatus = await api.getTrip(start.tripId); // 0 → 마지막 구간이라 DONE
+    expect(doneStatus.phase, TripPhase.done);
+    expect(() => api.switchLeg(start.tripId, 0), throwsA(isA<ApiException>()));
+  });
+
+  // API.md §9-3 v0.11 — "내렸어요" + 되돌리기
+  test('내렸어요 — remainingStops > 2면 400 (§9-3 v0.11)', () async {
+    final journey = await api.createJourney(_request);
+    final start = await api.startTrip(journey.id);
+    await api.getTrip(start.tripId); // 특정(remaining=3, mock 3정거장 고정)
+    expect(() => api.alightTrip(start.tripId), throwsA(isA<ApiException>()));
+  });
+
+  test('내렸어요 — 환승 구간이면 곧바로 다음 구간을 시작한다 (§9-3 v0.11)', () async {
+    final journey = await api.createJourney(_request);
+    final start = await api.startTrip(journey.id);
+    await api.getTrip(start.tripId); // 특정
+    await api.getTrip(start.tripId); // remaining=2 → 이제 내렸어요 가능
+
+    final status = await api.alightTrip(start.tripId);
+    expect(status.phase, TripPhase.tracking); // TRANSFER를 거치지 않는다
+    expect(status.legIndex, 1);
+    expect(status.remainingStops, isNull); // 새 구간 — 위치 확인 중부터
+    expect(status.undoableUntil, isNotNull);
+  });
+
+  test('내렸어요 — 마지막 구간이면 DONE, 되돌리면 다시 TRACKING (§9-3 v0.11)', () async {
+    final start = await api.startTripWithLegs(const [
+      JourneyLeg(line: '3호선', boardStop: '충무로', alightStop: '교대'),
+    ]);
+    await api.getTrip(start.tripId); // 특정
+    await api.getTrip(start.tripId); // remaining=2
+
+    final alighted = await api.alightTrip(start.tripId);
+    expect(alighted.phase, TripPhase.done);
+    expect(alighted.undoableUntil, isNotNull);
+
+    final undone = await api.undoAlight(start.tripId);
+    expect(undone.phase, TripPhase.tracking);
+    expect(undone.remainingStops, 2); // 하차 직전 그대로 복원
+    expect(undone.undoableUntil, isNull);
+  });
+
+  test('되돌리기 — 스냅숏 없으면 400, 한도(2회) 초과도 400 (§9-3 v0.11)', () async {
+    final journey = await api.createJourney(_request);
+    final start = await api.startTrip(journey.id);
+
+    // 아직 한 번도 내리지 않았다 — 되돌릴 게 없다
+    expect(() => api.undoAlight(start.tripId), throwsA(isA<ApiException>()));
+
+    await api.getTrip(start.tripId); // 특정
+    await api.getTrip(start.tripId); // remaining=2
+    await api.alightTrip(start.tripId); // 1회 하차 → 다음 구간
+    await api.undoAlight(start.tripId); // 1회 되돌리기 — 되돌아온 구간도 remaining=2
+
+    await api.alightTrip(start.tripId); // 다시 하차
+    await api.undoAlight(start.tripId); // 2회째 되돌리기 — 한도
+
+    await api.alightTrip(start.tripId); // 세 번째 하차
+    expect(
+      () => api.undoAlight(start.tripId),
+      throwsA(isA<ApiException>()), // 3회째 되돌리기는 한도 초과
+    );
+  });
+
   test('1회성 트립(§9-2 POST /api/v1/trips) — 여정 목록은 그대로, 동시 1개·검증은 동일', () async {
     final start = await api.startTripWithLegs(_request.legs);
     expect(await api.listJourneys(), isEmpty); // 몰래 여정을 만들지 않는다 (FR-708)
