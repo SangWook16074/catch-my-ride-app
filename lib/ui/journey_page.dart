@@ -16,6 +16,7 @@ import 'components/center_message.dart';
 import 'components/fade_route.dart';
 import 'components/save_journey_sheet.dart';
 import 'components/tab_header.dart';
+import 'components/trip_conflict.dart';
 import 'components/trip_location_sheet.dart';
 import 'design/components/button.dart';
 import 'design/components/card.dart';
@@ -188,7 +189,10 @@ class _JourneyPageState extends State<JourneyPage> {
     }
     HapticFeedback.mediumImpact();
     try {
-      final start = await startQuickTrip(route.legs);
+      final start = await runTripStart(context, () => startQuickTrip(route.legs));
+      if (start == null) {
+        return;
+      }
       unawaited(
         activeTrip.begin(
           tripId: start.tripId,
@@ -249,8 +253,12 @@ class _JourneyPageState extends State<JourneyPage> {
     // 햅틱: 트립 시작 = 주요 확정 액션 (CLAUDE.md 적응형 UI 규칙)
     HapticFeedback.mediumImpact();
     try {
-      final start = await startJourneyTrip(journey.id);
-      // 이어보기·메인 요약 카드·잠금화면 표면을 한 번에 건다 (서버에 활성 트립 조회가 없다 — §9)
+      final start = await runTripStart(context, () => startJourneyTrip(journey.id));
+      if (start == null) {
+        return;
+      }
+      // 이어보기·메인 요약 카드·잠금화면 표면을 한 번에 건다 — 서버 왕복(§9-4 currentTrip)을
+      // 기다리지 않고 방금 받은 응답으로 바로 반영한다
       unawaited(
         activeTrip.begin(
           tripId: start.tripId,
@@ -489,15 +497,15 @@ class _JourneyPageState extends State<JourneyPage> {
           // 여정·최근 길 없음 + 진행 중 트립 없음은 build의 가운데 안내가 담당한다.
           // 시작 진입점이 맨 위의 영역(카드) — 진행 중 트립이 있으면 동시 1개 규칙(§9-2)에 걸리므로 숨긴다
           if (!hasTrip) _startCard(),
+          // 광고는 시작 카드와 저장한 여정 사이에 깔린다 (오너 요청 2026-10-01) —
+          // 화면에 고정해 따라다니지 않는다 (오너 결정 2026-09-19: 셸 하단 플로팅 폐기)
+          const AdBanner(),
           if (_journeys.isNotEmpty) _sectionHeader('저장한 여정'),
           for (final journey in _journeys) _journeyCard(journey),
           // 저장 안 한 1회성 길 — 원탭 재시작·나중에 저장 (FR-708 → FR-702 전환 루프)
           if (_recent.isNotEmpty) _sectionHeader('최근 간 길'),
           for (final route in _recent) _recentCard(route, !hasTrip),
           // 경로 생성은 build의 FAB가 담당한다
-          // 광고는 여정 목록·만들기 버튼 아래 스크롤 끝 — 시작 동선을 가로막지 않고,
-          // 화면에 고정해 따라다니지 않는다 (오너 결정 2026-09-19: 셸 하단 플로팅 폐기)
-          const AdBanner(),
         ];
     }
   }
@@ -530,14 +538,11 @@ class _JourneyPageState extends State<JourneyPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.xl,
-        AppSpace.xs,
+        AppSpace.md,
         AppSpace.xl,
         AppSpace.sm,
       ),
-      child: Text(
-        title,
-        style: AppTypo.caption.copyWith(color: context.colors.inkSubtle),
-      ),
+      child: Text(title, style: AppTypo.title),
     );
   }
 
